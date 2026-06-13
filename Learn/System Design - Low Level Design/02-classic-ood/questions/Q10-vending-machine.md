@@ -1,14 +1,25 @@
 # Vending Machine
 
 **Track:** Classic OOD  
-**Companies:** Google, Amazon, Samsung  
+**Companies:** Amazon, Coca-Cola  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-O10-vending-machine.md](../../../Case Studies/lld/classic-ood/CS-LLD-O10-vending-machine.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Automated retail inventory and change. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Design a vending machine: insert money, select product, dispense change.
+Design vending machine: select item, insert coins, dispense, return change.
 
 ---
 
@@ -16,26 +27,30 @@ Design a vending machine: insert money, select product, dispense change.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Vending Machine? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design vending machine? | Include in MVP — Design vending machine |
+| 5 | Requirement: select item? | Include in MVP — select item |
+| 6 | Requirement: insert coins? | Include in MVP — insert coins |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for vending machine
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- VendingMachine handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via State interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,49 +58,65 @@ Design a vending machine: insert money, select product, dispense change.
 
 | Entity | Role |
 |--------|------|
-| VendingMachine | Core domain entity / service |
-| Product | Core domain entity / service |
-| Inventory | Core domain entity / service |
-| Coin | Core domain entity / service |
-| PaymentProcessor | Core domain entity / service |
-| VendingState | Core domain entity / service |
+| `Machine` | Inventory + cash |
+| `Slot` | Product row |
+| `Product` | Item |
+| `Coin` | Denomination |
+| `Inventory` | Stock count |
+| `DispenseState` | Idle/selection/payment |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `VendingMachine`, `Product`, `Inventory`, `Coin`, `PaymentProcessor`, `VendingState`  
-**Verbs → methods:** `selectProduct(code)` and related operations
+**Nouns → classes:** `Machine`, `Slot`, `Product`, `Coin`, `Inventory`, `DispenseState`  
+**Verbs → methods:** `insertCoin()`, `selectItem()`, `dispense()`, `getChange()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  VendingMachineService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +selectProduct()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  VendingMachine     │──────>│ State            │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteState    │
+│  Machine            │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  VendingMachine     │────>│  Product  │
+│  Slot               │────>│  Product         │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +selectProduct(code)
+    class VendingMachine {
+        +void insertCoin(Coin coin)
+        +Product selectItem(String code)
+        +void dispense()
+        +BigDecimal getChange()
     }
-    class DomainRoot {
-        +execute()
+    class Machine {
+        +execute() void
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class Slot {
+        +execute() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class Product {
+        +execute() void
+    }
+    class Coin {
+        +execute() void
+    }
+    class Inventory {
+        +execute() void
+    }
+    class DispenseState {
+        +execute() void
+    }
+    VendingMachine --> Machine
 ```
 
 ---
@@ -93,9 +124,11 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class VendingMachineService {
-    public Result selectProduct(code);
-    // Additional: validate, lookup, list as needed for Vending Machine
+public class VendingMachine {
+    public void insertCoin(Coin coin);
+    public Product selectItem(String code);
+    public void dispense();
+    public BigDecimal getChange();
 }
 ```
 
@@ -105,13 +138,13 @@ public class VendingMachineService {
 
 | Pattern | Application |
 |---------|-------------|
-| State | Primary variation point for vending machine |
-| Strategy | Secondary structure or creation |
+| State | Idle / has-money / dispensing |
+| Strategy | Change-making algorithm |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** VendingMachine orchestrates; entities hold state
+- **O:** New behavior via new State impl
+- **D:** Depend on State interface
 
 ---
 
@@ -121,24 +154,31 @@ public class VendingMachineService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: selectProduct()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant V as VendingMachine
+participant S as VendingState
+U->>V: insertCoin(1)
+U->>V: selectItem(A1)
+V->>S: dispense()
+V-->>U: Product
 ```
 
-**Failure path:** Invalid input → throw `InsufficientFundsException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+U->>V: selectItem(A1)
+V->>V: checkFunds()
+V-->>U: InsufficientFundsException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `VendingMachineService` core loop."
-
-Extension example: add new `VendingState` subclass or enum value + plug new Strategy at runtime.
+> "Card payment: new PaymentProcessor alongside coin flow."
+>
+> "New product category: extend Product type enum and slot configuration."
 
 ---
 
@@ -146,58 +186,58 @@ Extension example: add new `VendingState` subclass or enum value + plug new Stra
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| State | enum | State pattern | State — side effects per state |
+| Change | greedy coins | DP optimal | greedy — US coin standard |
+| Inventory | per slot | central | per slot — realistic |
+| Payment | coins only | multi-method | coins MVP |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (InsufficientFundsException)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design vending machine starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Vending Machine — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `VendingMachine`, `Product`, `Inventory`, `Coin`, `PaymentProcessor`, `VendingState`. I'll group them into domain structure and a service facade."
+> "Entities: `Machine`, `Slot`, `Product`, `Coin`, `Inventory`, `DispenseState`. Domain structure separate from `VendingMachine` orchestration."
 >
-> "The variation point is State — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design vending machine: select item, insert coins, dispense, return change."
 >
-> "Core API: `selectProduct(code)` — validate first, delegate to domain, return typed result."
+> "`Machine` — inventory + cash; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`Slot` — product row; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`Product` — item; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`VendingMachine` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `State` in isolation?
+2. How would you extend Vending Machine without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [State pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
 - [Java implementation](../../09-code-implementations/java/classic/vending-machine/) (full)
-

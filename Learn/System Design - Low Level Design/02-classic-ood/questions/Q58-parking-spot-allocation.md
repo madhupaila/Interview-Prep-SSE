@@ -1,14 +1,25 @@
 # Parking Spot Allocation
 
 **Track:** Classic OOD  
-**Companies:** Amazon  
+**Companies:** Amazon, Google  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-O58-parking-spot-allocation.md](../../../Case Studies/lld/classic-ood/CS-LLD-O58-parking-spot-allocation.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Parking Spot Allocation domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Design optimal parking spot allocation policies for a lot.
+Design optimal spot allocation service decoupled from payment and gates.
 
 ---
 
@@ -16,26 +27,30 @@ Design optimal parking spot allocation policies for a lot.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Parking Spot Allocation? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design optimal spot allocation service d? | Include in MVP — Design optimal spot allocation service decoupled f |
+| 5 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 6 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for parking spot allocation
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- AllocationService handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via AllocationStrategy interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,48 +58,62 @@ Design optimal parking spot allocation policies for a lot.
 
 | Entity | Role |
 |--------|------|
-| ParkingLot | Core domain entity / service |
-| Spot | Core domain entity / service |
-| AllocationStrategy | Core domain entity / service |
-| Vehicle | Core domain entity / service |
-| AllocationService | Core domain entity / service |
+| `SpotRegistry` | All spots |
+| `AllocationRequest` | Vehicle type + prefs |
+| `AllocationStrategy` | Algorithm |
+| `SpotAssignment` | Result |
+| `VehicleType` | Size enum |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `ParkingLot`, `Spot`, `AllocationStrategy`, `Vehicle`, `AllocationService`  
-**Verbs → methods:** `allocate(vehicle)` and related operations
+**Nouns → classes:** `SpotRegistry`, `AllocationRequest`, `AllocationStrategy`, `SpotAssignment`, `VehicleType`  
+**Verbs → methods:** `create()`, `getById()`, `listAll()`, `delete()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  ParkingLotService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +allocate()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  AllocationService  │──────>│ Strategy         │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteStrategy │
+│  SpotRegistry       │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  ParkingLot     │────>│  Spot  │
+│  AllocationRequest  │────>│  AllocationStrategy│
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +allocate(vehicle)
+    class AllocationService {
+        +void create(SpotRegistry entity)
+        +Optional<SpotRegistry> getById(String id)
+        +List<SpotRegistry> listAll()
+        +void delete(String id)
     }
-    class DomainRoot {
-        +execute()
+    class SpotRegistry {
+        +execute() void
     }
-    class Strategy {
+    class AllocationRequest {
+        +execute() void
+    }
+    class AllocationStrategy {
         <<interface>>
-        +apply()
+        +apply() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class SpotAssignment {
+        +execute() void
+    }
+    class VehicleType {
+        <<enumeration>>
+    }
+    AllocationService --> SpotRegistry
 ```
 
 ---
@@ -92,9 +121,11 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class ParkingLotService {
-    public Result allocate(vehicle);
-    // Additional: validate, lookup, list as needed for Parking Spot Allocation
+public class AllocationService {
+    public void create(SpotRegistry entity);
+    public Optional<SpotRegistry> getById(String id);
+    public List<SpotRegistry> listAll();
+    public void delete(String id);
 }
 ```
 
@@ -104,13 +135,12 @@ public class ParkingLotService {
 
 | Pattern | Application |
 |---------|-------------|
-| Strategy | Primary variation point for parking spot allocation |
-
+| Strategy | Swappable algorithms |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** AllocationService orchestrates; entities hold state
+- **O:** New behavior via new AllocationStrategy impl
+- **D:** Depend on AllocationStrategy interface
 
 ---
 
@@ -120,24 +150,32 @@ public class ParkingLotService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: allocate()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as AllocationService
+participant D as SpotRegistry
+U->>S: create()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `LotFullException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as AllocationService
+U->>S: create(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `ParkingLotService` core loop."
-
-Extension example: add new `AllocationService` subclass or enum value + plug new Strategy at runtime.
+> "New `Strategy` implementation plugs in at runtime — no change to `AllocationService`."
+>
+> "Add new `SpotRegistry` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -145,51 +183,52 @@ Extension example: add new `AllocationService` subclass or enum value + plug new
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Strategy | Strategy — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (LotFullException)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design parking spot allocation starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Parking Spot Allocation — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `ParkingLot`, `Spot`, `AllocationStrategy`, `Vehicle`, `AllocationService`. I'll group them into domain structure and a service facade."
+> "Entities: `SpotRegistry`, `AllocationRequest`, `AllocationStrategy`, `SpotAssignment`, `VehicleType`. Domain structure separate from `AllocationService` orchestration."
 >
-> "The variation point is Strategy — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design optimal spot allocation service decoupled from payment and gates."
 >
-> "Core API: `allocate(vehicle)` — validate first, delegate to domain, return typed result."
+> "`SpotRegistry` — all spots; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`AllocationRequest` — vehicle type + prefs; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`AllocationStrategy` — algorithm; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`AllocationService` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Strategy` in isolation?
+2. How would you extend Parking Spot Allocation without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
@@ -197,6 +236,6 @@ Extension example: add new `AllocationService` subclass or enum value + plug new
 
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
 - [Java implementation](../../09-code-implementations/java/classic/parking-spot-allocation/) (skeleton)
-
+- [HLD counterpart](../System%20Design%20-%20High%20Level%20Design/03-classic-hld/questions/Q30-parking-lot-elevator.md)

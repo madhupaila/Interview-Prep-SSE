@@ -6,6 +6,18 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-G01-design-chatgpt-clone.md](../../../Case Studies/hld/genai/CS-HLD-G01-design-chatgpt-clone.md)
+> **End-to-end pair:** [ChatGPT-like Conversational AI](../../../Case Studies/paired/CS-PAIR-03-chatgpt-conversational-ai.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** 100M MAU, billions of messages, streaming tokens via SSE, multi-model routing, content moderation.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a conversational AI platform like ChatGPT: multi-turn chat, streaming responses, conversation history, plugins/tools, and multi-model support at global scale.

@@ -6,9 +6,20 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-LLD-O19-movie-ticket-booking.md](../../../Case Studies/lld/classic-ood/CS-LLD-O19-movie-ticket-booking.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after BookMyShow seat lock and payment. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## 1. Problem Statement
 
-Design cinema ticket booking: shows, seats, lock seats, payment.
+Design cinema booking: shows, seats, lock seats, payment, confirm.
 
 ---
 
@@ -16,26 +27,30 @@ Design cinema ticket booking: shows, seats, lock seats, payment.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Movie Ticket Booking? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design cinema booking? | Include in MVP — Design cinema booking |
+| 5 | Requirement: lock seats? | Include in MVP — lock seats |
+| 6 | Requirement: payment? | Include in MVP — payment |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for movie ticket booking
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- BookingService handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via PricingStrategy interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,49 +58,64 @@ Design cinema ticket booking: shows, seats, lock seats, payment.
 
 | Entity | Role |
 |--------|------|
-| Cinema | Core domain entity / service |
-| Screen | Core domain entity / service |
-| Show | Core domain entity / service |
-| Seat | Core domain entity / service |
-| Booking | Core domain entity / service |
-| SeatLock | Core domain entity / service |
+| `Cinema` | Theater |
+| `Show` | Movie + time |
+| `Screen` | Hall |
+| `Seat` | Row/col status |
+| `Booking` | Confirmed tickets |
+| `SeatLock` | Temporary hold |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `Cinema`, `Screen`, `Show`, `Seat`, `Booking`, `SeatLock`, `BookingService`  
-**Verbs → methods:** `bookSeats(show, seats)` and related operations
+**Nouns → classes:** `Cinema`, `Show`, `Screen`, `Seat`, `Booking`, `SeatLock`  
+**Verbs → methods:** `holdSeats()`, `confirm()`, `releaseHold()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  CinemaService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +bookSeats()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  BookingService     │──────>│ State            │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteState    │
+│  Cinema             │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Cinema     │────>│  Screen  │
+│  Show               │────>│  Screen          │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +bookSeats(show, seats)
+    class BookingService {
+        +SeatLock holdSeats(Show show, List<Seat> seats, Duration ttl)
+        +Booking confirm(SeatLock lock, Payment payment)
+        +void releaseHold(SeatLock lock)
     }
-    class DomainRoot {
-        +execute()
+    class Cinema {
+        +execute() void
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class Show {
+        +execute() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class Screen {
+        +execute() void
+    }
+    class Seat {
+        <<enumeration>>
+    }
+    class Booking {
+        +execute() void
+    }
+    class SeatLock {
+        +execute() void
+    }
+    BookingService --> Cinema
 ```
 
 ---
@@ -93,9 +123,10 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class CinemaService {
-    public Result bookSeats(show, seats);
-    // Additional: validate, lookup, list as needed for Movie Ticket Booking
+public class BookingService {
+    public SeatLock holdSeats(Show show, List<Seat> seats, Duration ttl);
+    public Booking confirm(SeatLock lock, Payment payment);
+    public void releaseHold(SeatLock lock);
 }
 ```
 
@@ -105,13 +136,13 @@ public class CinemaService {
 
 | Pattern | Application |
 |---------|-------------|
-| Factory | Primary variation point for movie ticket booking |
-| State | Secondary structure or creation |
+| State | Seat available / held / booked |
+| Strategy | Pricing |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** BookingService orchestrates; entities hold state
+- **O:** New behavior via new PricingStrategy impl
+- **D:** Depend on PricingStrategy interface
 
 ---
 
@@ -121,24 +152,32 @@ public class CinemaService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: bookSeats()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as BookingService
+participant D as Cinema
+U->>S: holdSeats()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `SeatUnavailableException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as BookingService
+U->>S: holdSeats(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `CinemaService` core loop."
-
-Extension example: add new `BookingService` subclass or enum value + plug new Strategy at runtime.
+> "New `State` implementation plugs in at runtime — no change to `BookingService`."
+>
+> "Add new `Cinema` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -146,59 +185,58 @@ Extension example: add new `BookingService` subclass or enum value + plug new St
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | State | State — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (SeatUnavailableException)
+- SeatLock with TTL — synchronized per Seat during hold
+- Double booking prevented by atomic seat state transition
+- Expired hold releases seat for other buyers
+- confirm() validates lock still valid and owned by session
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design movie ticket booking starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Movie Ticket Booking — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `Cinema`, `Screen`, `Show`, `Seat`, `Booking`, `SeatLock`, `BookingService`. I'll group them into domain structure and a service facade."
+> "Entities: `Cinema`, `Show`, `Screen`, `Seat`, `Booking`, `SeatLock`. Domain structure separate from `BookingService` orchestration."
 >
-> "The variation point is Factory — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design cinema booking: shows, seats, lock seats, payment, confirm."
 >
-> "Core API: `bookSeats(show, seats)` — validate first, delegate to domain, return typed result."
+> "`Cinema` — theater; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`Show` — movie + time; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`Screen` — hall; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`BookingService` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `State` in isolation?
+2. How would you extend Movie Ticket Booking without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [Factory pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
 - [Java implementation](../../09-code-implementations/java/classic/movie-ticket-booking/) (full)
-- HLD counterpart: [../System Design - High Level Design/03-classic-hld/questions/Q17-ticketmaster-booking.md](../System Design - High Level Design/03-classic-hld/questions/Q17-ticketmaster-booking.md)
-

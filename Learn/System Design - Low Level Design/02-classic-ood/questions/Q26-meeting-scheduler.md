@@ -1,14 +1,25 @@
 # Meeting Scheduler
 
 **Track:** Classic OOD  
-**Companies:** Google, Microsoft  
+**Companies:** Google, Microsoft, Zoom  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-O26-meeting-scheduler.md](../../../Case Studies/lld/classic-ood/CS-LLD-O26-meeting-scheduler.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Meeting Scheduler domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Design meeting scheduler: calendars, availability, book meeting rooms.
+Design meeting scheduler: propose slots, check conflicts, book room.
 
 ---
 
@@ -16,26 +27,30 @@ Design meeting scheduler: calendars, availability, book meeting rooms.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Meeting Scheduler? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Overbooking? | No — reject overlapping dates |
+| 5 | Cancellation? | Policy-based cancel window |
+| 6 | Room types? | Enum RoomType |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for meeting scheduler
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- SchedulerService handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via ConflictChecker interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,49 +58,64 @@ Design meeting scheduler: calendars, availability, book meeting rooms.
 
 | Entity | Role |
 |--------|------|
-| User | Core domain entity / service |
-| Calendar | Core domain entity / service |
-| TimeSlot | Core domain entity / service |
-| Meeting | Core domain entity / service |
-| Room | Core domain entity / service |
-| SchedulerService | Core domain entity / service |
+| `Meeting` | Event |
+| `Participant` | Attendee |
+| `Calendar` | Availability |
+| `TimeSlot` | Start/end |
+| `Room` | Physical resource |
+| `ConflictChecker` | Overlap detection |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `User`, `Calendar`, `TimeSlot`, `Meeting`, `Room`, `SchedulerService`, `ConflictChecker`  
-**Verbs → methods:** `schedule(meeting)` and related operations
+**Nouns → classes:** `Meeting`, `Participant`, `Calendar`, `TimeSlot`, `Room`, `ConflictChecker`  
+**Verbs → methods:** `create()`, `cancel()`, `searchAvailable()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  UserService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +schedule()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  SchedulerService   │──────>│ Strategy         │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteStrategy │
+│  Meeting            │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  User     │────>│  Calendar  │
+│  Participant        │────>│  Calendar        │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +schedule(meeting)
+    class SchedulerService {
+        +Booking create(Guest guest, Room room, LocalDateRange dates)
+        +void cancel(String bookingId)
+        +List<Room> searchAvailable(RoomType type, LocalDateRange dates)
     }
-    class DomainRoot {
-        +execute()
+    class Meeting {
+        +execute() void
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class Participant {
+        +execute() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class Calendar {
+        +execute() void
+    }
+    class TimeSlot {
+        +execute() void
+    }
+    class Room {
+        +execute() void
+    }
+    class ConflictChecker {
+        +execute() void
+    }
+    SchedulerService --> Meeting
 ```
 
 ---
@@ -93,9 +123,10 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class UserService {
-    public Result schedule(meeting);
-    // Additional: validate, lookup, list as needed for Meeting Scheduler
+public class SchedulerService {
+    public Booking create(Guest guest, Room room, LocalDateRange dates);
+    public void cancel(String bookingId);
+    public List<Room> searchAvailable(RoomType type, LocalDateRange dates);
 }
 ```
 
@@ -105,13 +136,12 @@ public class UserService {
 
 | Pattern | Application |
 |---------|-------------|
-| Strategy | Primary variation point for meeting scheduler |
-
+| Strategy | Variation point in Meeting Scheduler |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** SchedulerService orchestrates; entities hold state
+- **O:** New behavior via new ConflictChecker impl
+- **D:** Depend on ConflictChecker interface
 
 ---
 
@@ -121,24 +151,32 @@ public class UserService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: schedule()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as SchedulerService
+participant D as Meeting
+U->>S: create()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `ConflictException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as SchedulerService
+U->>S: create(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `UserService` core loop."
-
-Extension example: add new `ConflictChecker` subclass or enum value + plug new Strategy at runtime.
+> "New `Strategy` implementation plugs in at runtime — no change to `SchedulerService`."
+>
+> "Add new `Meeting` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -146,51 +184,52 @@ Extension example: add new `ConflictChecker` subclass or enum value + plug new S
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Strategy | Strategy — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (ConflictException)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design meeting scheduler starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Meeting Scheduler — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `User`, `Calendar`, `TimeSlot`, `Meeting`, `Room`, `SchedulerService`, `ConflictChecker`. I'll group them into domain structure and a service facade."
+> "Entities: `Meeting`, `Participant`, `Calendar`, `TimeSlot`, `Room`, `ConflictChecker`. Domain structure separate from `SchedulerService` orchestration."
 >
-> "The variation point is Strategy — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design meeting scheduler: propose slots, check conflicts, book room."
 >
-> "Core API: `schedule(meeting)` — validate first, delegate to domain, return typed result."
+> "`Meeting` — event; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`Participant` — attendee; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`Calendar` — availability; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`SchedulerService` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Strategy` in isolation?
+2. How would you extend Meeting Scheduler without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
@@ -198,6 +237,5 @@ Extension example: add new `ConflictChecker` subclass or enum value + plug new S
 
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
 - [Java implementation](../../09-code-implementations/java/classic/meeting-scheduler/) (full)
-

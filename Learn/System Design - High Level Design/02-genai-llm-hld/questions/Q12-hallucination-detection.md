@@ -6,6 +6,17 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-G12-hallucination-detection.md](../../../Case Studies/hld/genai/CS-HLD-G12-hallucination-detection.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Real-world context modeled after RAGAS faithfulness metrics and NLI verification. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a production system for: **Hallucination Detection System**.

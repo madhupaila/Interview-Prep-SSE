@@ -1,14 +1,25 @@
 # Course Registration
 
 **Track:** Classic OOD  
-**Companies:** Universities, Coursera  
+**Companies:** Coursera, Amazon  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-O34-course-registration.md](../../../Case Studies/lld/classic-ood/CS-LLD-O34-course-registration.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Course Registration domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Design university course registration: courses, seats, waitlist, enroll.
+Design university registration: courses, seats, waitlist, prerequisites.
 
 ---
 
@@ -16,26 +27,30 @@ Design university course registration: courses, seats, waitlist, enroll.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Course Registration? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design university registration? | Include in MVP — Design university registration |
+| 5 | Requirement: courses? | Include in MVP — courses |
+| 6 | Requirement: waitlist? | Include in MVP — waitlist |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for course registration
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- RegistrationService handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via PrerequisiteChecker interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,49 +58,65 @@ Design university course registration: courses, seats, waitlist, enroll.
 
 | Entity | Role |
 |--------|------|
-| Course | Core domain entity / service |
-| Student | Core domain entity / service |
-| Section | Core domain entity / service |
-| Enrollment | Core domain entity / service |
-| Waitlist | Core domain entity / service |
-| RegistrationService | Core domain entity / service |
+| `Student` | Enrollee |
+| `Course` | Offering |
+| `Section` | Time slot |
+| `Enrollment` | Seat record |
+| `Waitlist` | FIFO queue |
+| `PrerequisiteChecker` | Rules |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `Course`, `Student`, `Section`, `Enrollment`, `Waitlist`, `RegistrationService`  
-**Verbs → methods:** `enroll(student, section)` and related operations
+**Nouns → classes:** `Student`, `Course`, `Section`, `Enrollment`, `Waitlist`, `PrerequisiteChecker`  
+**Verbs → methods:** `holdSeats()`, `confirm()`, `releaseHold()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  CourseService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +enroll()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  RegistrationService│──────>│ Queue            │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteQueue    │
+│  Student            │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Course     │────>│  Student  │
+│  Course             │────>│  Section         │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +enroll(student, section)
+    class RegistrationService {
+        +SeatLock holdSeats(Show show, List<Seat> seats)
+        +Booking confirm(SeatLock lock)
+        +void releaseHold(SeatLock lock)
     }
-    class DomainRoot {
-        +execute()
+    class Student {
+        +execute() void
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class Course {
+        +execute() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class Section {
+        +execute() void
+    }
+    class Enrollment {
+        +execute() void
+    }
+    class Waitlist {
+        +enqueue() void
+        +dequeue() Object
+    }
+    class PrerequisiteChecker {
+        +execute() void
+    }
+    RegistrationService --> Student
 ```
 
 ---
@@ -93,9 +124,10 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class CourseService {
-    public Result enroll(student, section);
-    // Additional: validate, lookup, list as needed for Course Registration
+public class RegistrationService {
+    public SeatLock holdSeats(Show show, List<Seat> seats);
+    public Booking confirm(SeatLock lock);
+    public void releaseHold(SeatLock lock);
 }
 ```
 
@@ -105,13 +137,12 @@ public class CourseService {
 
 | Pattern | Application |
 |---------|-------------|
-| Observer | Primary variation point for course registration |
-| State | Secondary structure or creation |
+| Queue | FIFO ordering of work items |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** RegistrationService orchestrates; entities hold state
+- **O:** New behavior via new PrerequisiteChecker impl
+- **D:** Depend on PrerequisiteChecker interface
 
 ---
 
@@ -121,24 +152,32 @@ public class CourseService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: enroll()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as RegistrationService
+participant D as Student
+U->>S: holdSeats()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `SectionFullException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as RegistrationService
+U->>S: holdSeats(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `CourseService` core loop."
-
-Extension example: add new `RegistrationService` subclass or enum value + plug new Strategy at runtime.
+> "New `Queue` implementation plugs in at runtime — no change to `RegistrationService`."
+>
+> "Add new `Student` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -146,58 +185,58 @@ Extension example: add new `RegistrationService` subclass or enum value + plug n
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Queue | Queue — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (SectionFullException)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design course registration starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Course Registration — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `Course`, `Student`, `Section`, `Enrollment`, `Waitlist`, `RegistrationService`. I'll group them into domain structure and a service facade."
+> "Entities: `Student`, `Course`, `Section`, `Enrollment`, `Waitlist`, `PrerequisiteChecker`. Domain structure separate from `RegistrationService` orchestration."
 >
-> "The variation point is Observer — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design university registration: courses, seats, waitlist, prerequisites."
 >
-> "Core API: `enroll(student, section)` — validate first, delegate to domain, return typed result."
+> "`Student` — enrollee; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`Course` — offering; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`Section` — time slot; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`RegistrationService` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Queue` in isolation?
+2. How would you extend Course Registration without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [Observer pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/classic/course-registration/) (skeleton)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/classic/course-registration/) (full)

@@ -1,14 +1,25 @@
 # Download Manager
 
 **Track:** Concurrency LLD  
-**Companies:** Microsoft, Google  
+**Companies:** Microsoft, Apple  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-X12-download-manager.md](../../../Case Studies/lld/concurrency/CS-LLD-X12-download-manager.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Internet Download Manager parallel chunks. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Multi-threaded file download with chunk workers and merge.
+Design concurrent download manager with chunks, progress, pause/resume.
 
 ---
 
@@ -16,26 +27,31 @@ Multi-threaded file download with chunk workers and merge.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Download Manager? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Lock vs synchronized? | Justify choice |
+| 5 | Deadlock prevention? | Ordering or timeout |
+| 6 | Fairness? | Document starvation risk |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for download manager
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- DownloadManager handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Thread safety:** Fixed thread pool per file
+- Open-Closed via DownloadManager interface at variation points
+- Constructor injection for testability
+- Correctness under concurrent access — no data races
+- Avoid deadlock — consistent lock ordering where multiple locks
 
 ---
 
@@ -43,47 +59,57 @@ Multi-threaded file download with chunk workers and merge.
 
 | Entity | Role |
 |--------|------|
-| DownloadManager | Core domain entity / service |
-| DownloadTask | Core domain entity / service |
-| ChunkWorker | Core domain entity / service |
-| FileMerger | Core domain entity / service |
+| `DownloadTask` | File job |
+| `Chunk` | Byte range |
+| `WorkerPool` | Parallel fetch |
+| `ProgressTracker` | Status |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `DownloadManager`, `DownloadTask`, `ChunkWorker`, `FileMerger`  
-**Verbs → methods:** `download(url)` and related operations
+**Nouns → classes:** `DownloadTask`, `Chunk`, `WorkerPool`, `ProgressTracker`  
+**Verbs → methods:** `create()`, `getById()`, `listAll()`, `delete()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  DownloadManagerService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +download()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  DownloadManager    │──────>│ Concurrency      │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteConcurrency│
+│  DownloadTask       │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  DownloadManager     │────>│  DownloadTask  │
+│  Chunk              │────>│  WorkerPool      │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +download(url)
+    class DownloadManager {
+        +void create(DownloadTask entity)
+        +Optional<DownloadTask> getById(String id)
+        +List<DownloadTask> listAll()
+        +void delete(String id)
     }
-    class DomainRoot {
-        +execute()
+    class DownloadTask {
+        +execute() void
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class Chunk {
+        +execute() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class WorkerPool {
+        +execute() void
+    }
+    class ProgressTracker {
+        <<enumeration>>
+    }
+    DownloadManager --> DownloadTask
 ```
 
 ---
@@ -91,9 +117,11 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class DownloadManagerService {
-    public Result download(url);
-    // Additional: validate, lookup, list as needed for Download Manager
+public class DownloadManager {
+    public void create(DownloadTask entity);
+    public Optional<DownloadTask> getById(String id);
+    public List<DownloadTask> listAll();
+    public void delete(String id);
 }
 ```
 
@@ -103,13 +131,13 @@ public class DownloadManagerService {
 
 | Pattern | Application |
 |---------|-------------|
-| Thread Pool | Primary variation point for download manager |
-
+| Concurrency | Thread-safe design for Download Manager |
+| Synchronization | Locks, volatile, or concurrent collections |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** DownloadManager orchestrates; entities hold state
+- **O:** New behavior via new DownloadManager impl
+- **D:** Depend on DownloadManager interface
 
 ---
 
@@ -119,24 +147,32 @@ public class DownloadManagerService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: download()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as DownloadManager
+participant D as DownloadTask
+U->>S: create()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `ConcurrencyException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as DownloadManager
+U->>S: create(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `DownloadManagerService` core loop."
-
-Extension example: add new `FileMerger` subclass or enum value + plug new Strategy at runtime.
+> "New `Concurrency` implementation plugs in at runtime — no change to `DownloadManager`."
+>
+> "Add new `DownloadTask` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -144,58 +180,59 @@ Extension example: add new `FileMerger` subclass or enum value + plug new Strate
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Concurrency | Concurrency — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Thread safety:** Fixed thread pool per file
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (ConcurrencyException)
+- Identify shared mutable state across threads
+- Use synchronized, Lock, or concurrent collections appropriately
+- Avoid deadlock — consistent lock acquisition order
+- Document happens-before relationships for interview clarity
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design download manager starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Download Manager — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `DownloadManager`, `DownloadTask`, `ChunkWorker`, `FileMerger`. I'll group them into domain structure and a service facade."
+> "Entities: `DownloadTask`, `Chunk`, `WorkerPool`, `ProgressTracker`. Domain structure separate from `DownloadManager` orchestration."
 >
-> "The variation point is Thread Pool — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design concurrent download manager with chunks, progress, pause/resume."
 >
-> "Core API: `download(url)` — validate first, delegate to domain, return typed result."
+> "`DownloadTask` — file job; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`Chunk` — byte range; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`WorkerPool` — parallel fetch; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`DownloadManager` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Concurrency` in isolation?
+2. How would you extend Download Manager without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [Thread Pool pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Concurrency LLD track](../../04-concurrency-lld/README.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/concurrency/download-manager/) (skeleton)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/concurrency/download-manager/) (full)

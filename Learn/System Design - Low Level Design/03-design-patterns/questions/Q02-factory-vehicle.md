@@ -1,14 +1,25 @@
 # Factory — Vehicle Creator
 
 **Track:** Design Patterns  
-**Companies:** Tesla, Ford, Amazon  
+**Companies:** Tesla, Ford, Toyota  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-P02-factory-vehicle.md](../../../Case Studies/lld/design-patterns/CS-LLD-P02-factory-vehicle.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Factory — Vehicle Creator domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Design factory to create Car, Truck, Motorcycle based on type.
+Design factory creating Car, Truck, Motorcycle from VehicleType enum.
 
 ---
 
@@ -16,26 +27,30 @@ Design factory to create Car, Truck, Motorcycle based on type.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Factory — Vehicle Creator? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design factory creating Car? | Include in MVP — Design factory creating Car |
+| 5 | Requirement: Motorcycle from VehicleType enum.? | Include in MVP — Motorcycle from VehicleType enum. |
+| 6 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for factory — vehicle creator
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- VehicleFactory handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via VehicleFactory interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,49 +58,59 @@ Design factory to create Car, Truck, Motorcycle based on type.
 
 | Entity | Role |
 |--------|------|
-| Vehicle | Core domain entity / service |
-| VehicleFactory | Core domain entity / service |
-| Car | Core domain entity / service |
-| Truck | Core domain entity / service |
-| Motorcycle | Core domain entity / service |
-| VehicleType | Core domain entity / service |
+| `Vehicle` | Abstract product |
+| `Car` | 4-wheel |
+| `Truck` | Heavy |
+| `Motorcycle` | 2-wheel |
+| `VehicleFactory` | Creator |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `Vehicle`, `VehicleFactory`, `Car`, `Truck`, `Motorcycle`, `VehicleType`  
-**Verbs → methods:** `createVehicle(VehicleType)` and related operations
+**Nouns → classes:** `Vehicle`, `Car`, `Truck`, `Motorcycle`, `VehicleFactory`  
+**Verbs → methods:** `create()`, `getById()`, `listAll()`, `delete()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  VehicleService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +createVehicle()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  VehicleFactory     │──────>│ Factory          │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteFactory  │
+│  Vehicle            │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Vehicle     │────>│  VehicleFactory  │
+│  Car                │────>│  Truck           │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +createVehicle(VehicleType)
+    class VehicleFactory {
+        +void create(Vehicle entity)
+        +Optional<Vehicle> getById(String id)
+        +List<Vehicle> listAll()
+        +void delete(String id)
     }
-    class DomainRoot {
-        +execute()
+    class Vehicle {
+        -type: VehicleType
+        -licensePlate: String
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class Car {
+        +execute() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class Truck {
+        +execute() void
+    }
+    class Motorcycle {
+        +execute() void
+    }
+    VehicleFactory --> Vehicle
 ```
 
 ---
@@ -93,9 +118,11 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class VehicleService {
-    public Result createVehicle(VehicleType);
-    // Additional: validate, lookup, list as needed for Factory — Vehicle Creator
+public class VehicleFactory {
+    public void create(Vehicle entity);
+    public Optional<Vehicle> getById(String id);
+    public List<Vehicle> listAll();
+    public void delete(String id);
 }
 ```
 
@@ -105,13 +132,12 @@ public class VehicleService {
 
 | Pattern | Application |
 |---------|-------------|
-| Factory Method | Primary variation point for factory — vehicle creator |
-
+| Factory | Demonstrate Factory pattern in factory-vehicle |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** VehicleFactory orchestrates; entities hold state
+- **O:** New behavior via new VehicleFactory impl
+- **D:** Depend on VehicleFactory interface
 
 ---
 
@@ -121,24 +147,32 @@ public class VehicleService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: createVehicle()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as VehicleFactory
+participant D as Vehicle
+U->>S: create()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `DomainException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as VehicleFactory
+U->>S: create(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `VehicleService` core loop."
-
-Extension example: add new `VehicleType` subclass or enum value + plug new Strategy at runtime.
+> "New `Factory` implementation plugs in at runtime — no change to `VehicleFactory`."
+>
+> "Add new `Vehicle` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -146,58 +180,58 @@ Extension example: add new `VehicleType` subclass or enum value + plug new Strat
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Factory | Factory — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (domain check)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design factory — vehicle creator starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Factory — Vehicle Creator — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `Vehicle`, `VehicleFactory`, `Car`, `Truck`, `Motorcycle`, `VehicleType`. I'll group them into domain structure and a service facade."
+> "Entities: `Vehicle`, `Car`, `Truck`, `Motorcycle`, `VehicleFactory`. Domain structure separate from `VehicleFactory` orchestration."
 >
-> "The variation point is Factory Method — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design factory creating Car, Truck, Motorcycle from VehicleType enum."
 >
-> "Core API: `createVehicle(VehicleType)` — validate first, delegate to domain, return typed result."
+> "`Vehicle` — abstract product; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`Car` — 4-wheel; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`Truck` — heavy; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`VehicleFactory` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Factory` in isolation?
+2. How would you extend Factory — Vehicle Creator without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [Factory Method pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/patterns/factory-vehicle/) (skeleton)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/patterns/factory-vehicle/) (full)

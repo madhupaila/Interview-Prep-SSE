@@ -1,14 +1,25 @@
 # Coffee Machine
 
 **Track:** Classic OOD  
-**Companies:** Starbucks, Google  
+**Companies:** Starbucks, Nestlé  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-O12-coffee-machine.md](../../../Case Studies/lld/classic-ood/CS-LLD-O12-coffee-machine.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Coffee Machine domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Design coffee machine with recipes and ingredient dispensers.
+Design coffee machine with recipes, ingredients inventory, and brew states.
 
 ---
 
@@ -16,26 +27,30 @@ Design coffee machine with recipes and ingredient dispensers.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Coffee Machine? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design coffee machine with recipes? | Include in MVP — Design coffee machine with recipes |
+| 5 | Requirement: ingredients inventory? | Include in MVP — ingredients inventory |
+| 6 | Requirement: and brew states.? | Include in MVP — and brew states. |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for coffee machine
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- CoffeeMaker handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via Recipe interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,49 +58,60 @@ Design coffee machine with recipes and ingredient dispensers.
 
 | Entity | Role |
 |--------|------|
-| CoffeeMachine | Core domain entity / service |
-| Recipe | Core domain entity / service |
-| Ingredient | Core domain entity / service |
-| Beverage | Core domain entity / service |
-| Dispenser | Core domain entity / service |
-| BeverageFactory | Core domain entity / service |
+| `Machine` | Hardware facade |
+| `Recipe` | Espresso/latte steps |
+| `Ingredient` | Beans/milk/water |
+| `Beverage` | Output |
+| `BrewState` | Idle/heating/brewing |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `CoffeeMachine`, `Recipe`, `Ingredient`, `Beverage`, `Dispenser`, `BeverageFactory`  
-**Verbs → methods:** `brew(recipe)` and related operations
+**Nouns → classes:** `Machine`, `Recipe`, `Ingredient`, `Beverage`, `BrewState`  
+**Verbs → methods:** `reserve()`, `release()`, `getAvailable()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  CoffeeMachineService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +brew()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  CoffeeMaker        │──────>│ State            │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteState    │
+│  Machine            │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  CoffeeMachine     │────>│  Recipe  │
+│  Recipe             │────>│  Ingredient      │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +brew(recipe)
+    class CoffeeMaker {
+        +void reserve(String sku, int qty)
+        +void release(String sku, int qty)
+        +int getAvailable(String sku)
     }
-    class DomainRoot {
-        +execute()
+    class Machine {
+        +execute() void
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class Recipe {
+        +execute() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class Ingredient {
+        +execute() void
+    }
+    class Beverage {
+        +execute() void
+    }
+    class BrewState {
+        +execute() void
+    }
+    CoffeeMaker --> Machine
 ```
 
 ---
@@ -93,9 +119,10 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class CoffeeMachineService {
-    public Result brew(recipe);
-    // Additional: validate, lookup, list as needed for Coffee Machine
+public class CoffeeMaker {
+    public void reserve(String sku, int qty);
+    public void release(String sku, int qty);
+    public int getAvailable(String sku);
 }
 ```
 
@@ -105,13 +132,12 @@ public class CoffeeMachineService {
 
 | Pattern | Application |
 |---------|-------------|
-| Factory | Primary variation point for coffee machine |
-| Decorator | Secondary structure or creation |
+| State | Lifecycle state transitions |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** CoffeeMaker orchestrates; entities hold state
+- **O:** New behavior via new Recipe impl
+- **D:** Depend on Recipe interface
 
 ---
 
@@ -121,24 +147,32 @@ public class CoffeeMachineService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: brew()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as CoffeeMaker
+participant D as Machine
+U->>S: reserve()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `OutOfStockException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as CoffeeMaker
+U->>S: reserve(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `CoffeeMachineService` core loop."
-
-Extension example: add new `BeverageFactory` subclass or enum value + plug new Strategy at runtime.
+> "New `State` implementation plugs in at runtime — no change to `CoffeeMaker`."
+>
+> "Add new `Machine` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -146,58 +180,58 @@ Extension example: add new `BeverageFactory` subclass or enum value + plug new S
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | State | State — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (OutOfStockException)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design coffee machine starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Coffee Machine — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `CoffeeMachine`, `Recipe`, `Ingredient`, `Beverage`, `Dispenser`, `BeverageFactory`. I'll group them into domain structure and a service facade."
+> "Entities: `Machine`, `Recipe`, `Ingredient`, `Beverage`, `BrewState`. Domain structure separate from `CoffeeMaker` orchestration."
 >
-> "The variation point is Factory — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design coffee machine with recipes, ingredients inventory, and brew states."
 >
-> "Core API: `brew(recipe)` — validate first, delegate to domain, return typed result."
+> "`Machine` — hardware facade; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`Recipe` — espresso/latte steps; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`Ingredient` — beans/milk/water; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`CoffeeMaker` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `State` in isolation?
+2. How would you extend Coffee Machine without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [Factory pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/classic/coffee-machine/) (full)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/classic/coffee-machine/) (skeleton)

@@ -6,6 +6,17 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-G21-medical-qa-compliance.md](../../../Case Studies/hld/genai/CS-HLD-G21-medical-qa-compliance.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Real-world context modeled after Epic + LLM with HIPAA audit trails. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a production system for: **Medical Q&A with Compliance**.

@@ -6,9 +6,20 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-LLD-P11-composite-org-chart.md](../../../Case Studies/lld/design-patterns/CS-LLD-P11-composite-org-chart.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Composite — Org Chart domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## 1. Problem Statement
 
-Design org chart where manager contains employees and sub-managers.
+Design composite for org chart: Employee leaf and Department composite.
 
 ---
 
@@ -16,26 +27,30 @@ Design org chart where manager contains employees and sub-managers.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Composite — Org Chart? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design composite for org chart? | Include in MVP — Design composite for org chart |
+| 5 | Requirement: Employee leaf and Department composite.? | Include in MVP — Employee leaf and Department composite. |
+| 6 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for composite — org chart
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- OrgComposite handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via OrgComponent interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,47 +58,57 @@ Design org chart where manager contains employees and sub-managers.
 
 | Entity | Role |
 |--------|------|
-| Employee | Core domain entity / service |
-| Manager | Core domain entity / service |
-| OrgComponent | Core domain entity / service |
-| OrgChart | Core domain entity / service |
+| `OrgComponent` | Component |
+| `Employee` | Leaf |
+| `Department` | Composite |
+| `OrgChart` | Root tree |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `Employee`, `Manager`, `OrgComponent`, `OrgChart`  
-**Verbs → methods:** `getTotalSalary()` and related operations
+**Nouns → classes:** `OrgComponent`, `Employee`, `Department`, `OrgChart`  
+**Verbs → methods:** `create()`, `getById()`, `listAll()`, `delete()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  EmployeeService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +getTotalSalary()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  OrgComposite       │──────>│ Composite        │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteComposite│
+│  OrgComponent       │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Employee     │────>│  Manager  │
+│  Employee           │────>│  Department      │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +getTotalSalary()
+    class OrgComposite {
+        +void create(OrgComponent entity)
+        +Optional<OrgComponent> getById(String id)
+        +List<OrgComponent> listAll()
+        +void delete(String id)
     }
-    class DomainRoot {
-        +execute()
+    class OrgComponent {
+        +execute() void
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class Employee {
+        +execute() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class Department {
+        +execute() void
+    }
+    class OrgChart {
+        +execute() void
+    }
+    OrgComposite --> OrgComponent
 ```
 
 ---
@@ -91,9 +116,11 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class EmployeeService {
-    public Result getTotalSalary();
-    // Additional: validate, lookup, list as needed for Composite — Org Chart
+public class OrgComposite {
+    public void create(OrgComponent entity);
+    public Optional<OrgComponent> getById(String id);
+    public List<OrgComponent> listAll();
+    public void delete(String id);
 }
 ```
 
@@ -103,13 +130,12 @@ public class EmployeeService {
 
 | Pattern | Application |
 |---------|-------------|
-| Composite | Primary variation point for composite — org chart |
-
+| Composite | Manager contains employees |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** OrgComposite orchestrates; entities hold state
+- **O:** New behavior via new OrgComponent impl
+- **D:** Depend on OrgComponent interface
 
 ---
 
@@ -119,24 +145,32 @@ public class EmployeeService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: getTotalSalary()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as OrgComposite
+participant D as OrgComponent
+U->>S: create()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `DomainException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as OrgComposite
+U->>S: create(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `EmployeeService` core loop."
-
-Extension example: add new `OrgChart` subclass or enum value + plug new Strategy at runtime.
+> "New `Composite` implementation plugs in at runtime — no change to `OrgComposite`."
+>
+> "Add new `OrgComponent` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -144,58 +178,58 @@ Extension example: add new `OrgChart` subclass or enum value + plug new Strategy
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Composite | Composite — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (domain check)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design composite — org chart starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Composite — Org Chart — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `Employee`, `Manager`, `OrgComponent`, `OrgChart`. I'll group them into domain structure and a service facade."
+> "Entities: `OrgComponent`, `Employee`, `Department`, `OrgChart`. Domain structure separate from `OrgComposite` orchestration."
 >
-> "The variation point is Composite — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design composite for org chart: Employee leaf and Department composite."
 >
-> "Core API: `getTotalSalary()` — validate first, delegate to domain, return typed result."
+> "`OrgComponent` — component; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`Employee` — leaf; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`Department` — composite; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`OrgComposite` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Composite` in isolation?
+2. How would you extend Composite — Org Chart without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [Composite pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/patterns/composite-org-chart/) (skeleton)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/patterns/composite-org-chart/) (full)

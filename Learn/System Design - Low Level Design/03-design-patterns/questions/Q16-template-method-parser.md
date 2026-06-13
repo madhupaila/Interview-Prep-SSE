@@ -1,14 +1,25 @@
 # Template Method — Data Parser
 
 **Track:** Design Patterns  
-**Companies:** Apache, Google  
+**Companies:** Apache, Elastic  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-P16-template-method-parser.md](../../../Case Studies/lld/design-patterns/CS-LLD-P16-template-method-parser.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Template Method — Data Parser domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Define parse skeleton; subclasses implement format-specific steps.
+Design template method for CSV/JSON parsers sharing open-read-parse-close skeleton.
 
 ---
 
@@ -16,26 +27,30 @@ Define parse skeleton; subclasses implement format-specific steps.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Template Method — Data Parser? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design template method for CSV/JSON pars? | Include in MVP — Design template method for CSV/JSON parsers sharin |
+| 5 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 6 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for template method — data parser
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- DataParser handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via DataParser interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,47 +58,53 @@ Define parse skeleton; subclasses implement format-specific steps.
 
 | Entity | Role |
 |--------|------|
-| DataParser | Core domain entity / service |
-| CsvParser | Core domain entity / service |
-| JsonParser | Core domain entity / service |
-| ParseContext | Core domain entity / service |
-
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
+| `DataParser` | Abstract template |
+| `CsvParser` | Concrete |
+| `JsonParser` | Concrete |
+| `ParseContext` | Input source |
 
 **Nouns → classes:** `DataParser`, `CsvParser`, `JsonParser`, `ParseContext`  
-**Verbs → methods:** `parse(input)` and related operations
+**Verbs → methods:** `create()`, `getById()`, `listAll()`, `delete()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  DataParserService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +parse()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  DataParser         │──────>│ Template Method  │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteTemplate Method│
+│  DataParser         │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  DataParser     │────>│  CsvParser  │
+│  CsvParser          │────>│  JsonParser      │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +parse(input)
+    class DataParser {
+        +void create(DataParser entity)
+        +Optional<DataParser> getById(String id)
+        +List<DataParser> listAll()
+        +void delete(String id)
     }
-    class DomainRoot {
-        +execute()
+    class CsvParser {
+        +execute() void
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class JsonParser {
+        +execute() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class ParseContext {
+        +execute() void
+    }
 ```
 
 ---
@@ -91,9 +112,11 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class DataParserService {
-    public Result parse(input);
-    // Additional: validate, lookup, list as needed for Template Method — Data Parser
+public class DataParser {
+    public void create(DataParser entity);
+    public Optional<DataParser> getById(String id);
+    public List<DataParser> listAll();
+    public void delete(String id);
 }
 ```
 
@@ -103,13 +126,12 @@ public class DataParserService {
 
 | Pattern | Application |
 |---------|-------------|
-| Template Method | Primary variation point for template method — data parser |
-
+| Template Method | Demonstrate Template Method pattern in template-method-parser |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** DataParser orchestrates; entities hold state
+- **O:** New behavior via new DataParser impl
+- **D:** Depend on DataParser interface
 
 ---
 
@@ -119,24 +141,32 @@ public class DataParserService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: parse()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as DataParser
+participant D as DataParser
+U->>S: create()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `DomainException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as DataParser
+U->>S: create(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `DataParserService` core loop."
-
-Extension example: add new `ParseContext` subclass or enum value + plug new Strategy at runtime.
+> "New `Template Method` implementation plugs in at runtime — no change to `DataParser`."
+>
+> "Add new `DataParser` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -144,58 +174,58 @@ Extension example: add new `ParseContext` subclass or enum value + plug new Stra
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Template Method | Template Method — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (domain check)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design template method — data parser starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Template Method — Data Parser — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `DataParser`, `CsvParser`, `JsonParser`, `ParseContext`. I'll group them into domain structure and a service facade."
+> "Entities: `DataParser`, `CsvParser`, `JsonParser`, `ParseContext`. Domain structure separate from `DataParser` orchestration."
 >
-> "The variation point is Template Method — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design template method for CSV/JSON parsers sharing open-read-parse-close skeleton."
 >
-> "Core API: `parse(input)` — validate first, delegate to domain, return typed result."
+> "`DataParser` — abstract template; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`CsvParser` — concrete; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`JsonParser` — concrete; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`DataParser` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Template Method` in isolation?
+2. How would you extend Template Method — Data Parser without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [Template Method pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/patterns/template-method-parser/) (skeleton)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/patterns/template-method-parser/) (full)

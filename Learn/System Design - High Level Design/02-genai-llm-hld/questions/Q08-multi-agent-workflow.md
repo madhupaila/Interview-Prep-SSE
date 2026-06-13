@@ -6,6 +6,18 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-G08-multi-agent-workflow.md](../../../Case Studies/hld/genai/CS-HLD-G08-multi-agent-workflow.md)
+> **End-to-end pair:** [Multi-Agent Workflow Platform](../../../Case Studies/paired/CS-PAIR-08-multi-agent-workflow.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Real-world context modeled after Microsoft AutoGen and CrewAI — multi-agent orchestration. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a production system for: **Multi-Agent Workflow Platform**.

@@ -1,14 +1,26 @@
 # LLM Provider Abstraction
 
 **Track:** Gen AI LLD  
-**Companies:** OpenAI, Anthropic, Google  
+**Companies:** Anthropic, OpenAI  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-A06-llm-provider-abstraction.md](../../../Case Studies/lld/genai/CS-LLD-A06-llm-provider-abstraction.md)
+> **End-to-end pair:** [LLM API Gateway / Model Router](../../../Case Studies/paired/CS-PAIR-10-llm-api-gateway.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after LiteLLM — unified provider interface. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Strategy pattern to swap OpenAI, Anthropic, local model providers.
+Design provider interface swapping OpenAI, Anthropic, local models.
 
 ---
 
@@ -16,26 +28,31 @@ Strategy pattern to swap OpenAI, Anthropic, local model providers.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for LLM Provider Abstraction? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Vector DB? | HLD — stub interface in LLD |
+| 5 | Streaming? | Extension |
+| 6 | Token limits? | Budget manager or truncate |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for llm provider abstraction
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- LLMProvider handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via LLMProvider interface at variation points
+- Constructor injection for testability
+- Swappable pipeline stages behind interfaces
+- Explicit boundary to HLD for vector DB, model serving, queues
 
 ---
 
@@ -43,48 +60,57 @@ Strategy pattern to swap OpenAI, Anthropic, local model providers.
 
 | Entity | Role |
 |--------|------|
-| LLMProvider | Core domain entity / service |
-| OpenAIProvider | Core domain entity / service |
-| AnthropicProvider | Core domain entity / service |
-| CompletionRequest | Core domain entity / service |
-| CompletionResponse | Core domain entity / service |
-
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
+| `LLMProvider` | Interface |
+| `OpenAIProvider` | Impl |
+| `AnthropicProvider` | Impl |
+| `CompletionRequest` | Prompt |
+| `CompletionResponse` | Text |
 
 **Nouns → classes:** `LLMProvider`, `OpenAIProvider`, `AnthropicProvider`, `CompletionRequest`, `CompletionResponse`  
-**Verbs → methods:** `complete(request)` and related operations
+**Verbs → methods:** `create()`, `getById()`, `listAll()`, `delete()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  LLMProviderService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +complete()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  LLMProvider        │──────>│ Strategy         │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteStrategy │
+│  LLMProvider        │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  LLMProvider     │────>│  OpenAIProvider  │
+│  OpenAIProvider     │────>│  AnthropicProvider│
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +complete(request)
+    class LLMProvider {
+        +void create(LLMProvider entity)
+        +Optional<LLMProvider> getById(String id)
+        +List<LLMProvider> listAll()
+        +void delete(String id)
     }
-    class DomainRoot {
-        +execute()
+    class OpenAIProvider {
+        +execute() void
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class AnthropicProvider {
+        +execute() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class CompletionRequest {
+        +execute() void
+    }
+    class CompletionResponse {
+        +execute() void
+    }
 ```
 
 ---
@@ -92,9 +118,11 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class LLMProviderService {
-    public Result complete(request);
-    // Additional: validate, lookup, list as needed for LLM Provider Abstraction
+public class LLMProvider {
+    public void create(LLMProvider entity);
+    public Optional<LLMProvider> getById(String id);
+    public List<LLMProvider> listAll();
+    public void delete(String id);
 }
 ```
 
@@ -104,13 +132,13 @@ public class LLMProviderService {
 
 | Pattern | Application |
 |---------|-------------|
-| Strategy | Primary variation point for llm provider abstraction |
-| Factory | Secondary structure or creation |
+| Strategy | Swappable pipeline components |
+| Chain of Responsibility | Sequential processing stages |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** LLMProvider orchestrates; entities hold state
+- **O:** New behavior via new LLMProvider impl
+- **D:** Depend on LLMProvider interface
 
 ---
 
@@ -120,24 +148,32 @@ public class LLMProviderService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: complete()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as LLMProvider
+participant D as LLMProvider
+U->>S: create()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `GenAIException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as LLMProvider
+U->>S: create(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `LLMProviderService` core loop."
-
-Extension example: add new `CompletionResponse` subclass or enum value + plug new Strategy at runtime.
+> "New `Strategy` implementation plugs in at runtime — no change to `LLMProvider`."
+>
+> "Add new `LLMProvider` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -145,59 +181,60 @@ Extension example: add new `CompletionResponse` subclass or enum value + plug ne
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Strategy | Strategy — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (GenAIException)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design llm provider abstraction starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design LLM Provider Abstraction — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `LLMProvider`, `OpenAIProvider`, `AnthropicProvider`, `CompletionRequest`, `CompletionResponse`. I'll group them into domain structure and a service facade."
+> "Entities: `LLMProvider`, `OpenAIProvider`, `AnthropicProvider`, `CompletionRequest`, `CompletionResponse`. Domain structure separate from `LLMProvider` orchestration."
 >
-> "The variation point is Strategy — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design provider interface swapping OpenAI, Anthropic, local models."
 >
-> "Core API: `complete(request)` — validate first, delegate to domain, return typed result."
+> "`LLMProvider` — interface; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`OpenAIProvider` — impl; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`AnthropicProvider` — impl; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`LLMProvider` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Strategy` in isolation?
+2. How would you extend LLM Provider Abstraction without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
+- [Gen AI LLD memory map](../../05-genai-llm-lld/memory-map-genai-lld.md)
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/genai/llm-provider-abstraction/) (skeleton)
-- HLD counterpart: [../System Design - High Level Design/02-genai-llm-hld/questions/Q05-llm-api-gateway.md](../System Design - High Level Design/02-genai-llm-hld/questions/Q05-llm-api-gateway.md)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/genai/llm-provider-abstraction/) (full)
+- [HLD counterpart](../System%20Design%20-%20High%20Level%20Design/02-genai-llm-hld/questions/Q05-llm-api-gateway.md)

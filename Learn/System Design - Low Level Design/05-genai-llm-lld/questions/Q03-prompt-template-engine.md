@@ -1,14 +1,26 @@
 # Prompt Template Engine
 
 **Track:** Gen AI LLD  
-**Companies:** OpenAI, LangChain vendors  
+**Companies:** LangChain, OpenAI  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-A03-prompt-template-engine.md](../../../Case Studies/lld/genai/CS-LLD-A03-prompt-template-engine.md)
+> **End-to-end pair:** [Prompt Management & Versioning](../../../Case Studies/paired/CS-PAIR-09-prompt-management.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Jinja2-style prompt templates with variables. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Design prompt templates with variables, partials, and versioning.
+Design prompt templates with variables, conditionals, and partials.
 
 ---
 
@@ -16,26 +28,31 @@ Design prompt templates with variables, partials, and versioning.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Prompt Template Engine? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Vector DB? | HLD — stub interface in LLD |
+| 5 | Streaming? | Extension |
+| 6 | Token limits? | Budget manager or truncate |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for prompt template engine
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- PromptEngine handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via PromptRenderer interface at variation points
+- Constructor injection for testability
+- Swappable pipeline stages behind interfaces
+- Explicit boundary to HLD for vector DB, model serving, queues
 
 ---
 
@@ -43,48 +60,57 @@ Design prompt templates with variables, partials, and versioning.
 
 | Entity | Role |
 |--------|------|
-| PromptTemplate | Core domain entity / service |
-| TemplateEngine | Core domain entity / service |
-| VariableResolver | Core domain entity / service |
-| TemplateVersion | Core domain entity / service |
-| RenderedPrompt | Core domain entity / service |
+| `PromptTemplate` | String template |
+| `TemplateContext` | Variables |
+| `PromptRenderer` | Fill slots |
+| `PromptValidator` | Schema check |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `PromptTemplate`, `TemplateEngine`, `VariableResolver`, `TemplateVersion`, `RenderedPrompt`  
-**Verbs → methods:** `render(context)` and related operations
+**Nouns → classes:** `PromptTemplate`, `TemplateContext`, `PromptRenderer`, `PromptValidator`  
+**Verbs → methods:** `create()`, `getById()`, `listAll()`, `delete()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  PromptTemplateService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +render()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  PromptEngine       │──────>│ Strategy         │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteStrategy │
+│  PromptTemplate     │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  PromptTemplate     │────>│  TemplateEngine  │
+│  TemplateContext    │────>│  PromptRenderer  │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +render(context)
+    class PromptEngine {
+        +void create(PromptTemplate entity)
+        +Optional<PromptTemplate> getById(String id)
+        +List<PromptTemplate> listAll()
+        +void delete(String id)
     }
-    class DomainRoot {
-        +execute()
+    class PromptTemplate {
+        +execute() void
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class TemplateContext {
+        +execute() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class PromptRenderer {
+        +execute() void
+    }
+    class PromptValidator {
+        +execute() void
+    }
+    PromptEngine --> PromptTemplate
 ```
 
 ---
@@ -92,9 +118,11 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class PromptTemplateService {
-    public Result render(context);
-    // Additional: validate, lookup, list as needed for Prompt Template Engine
+public class PromptEngine {
+    public void create(PromptTemplate entity);
+    public Optional<PromptTemplate> getById(String id);
+    public List<PromptTemplate> listAll();
+    public void delete(String id);
 }
 ```
 
@@ -104,13 +132,13 @@ public class PromptTemplateService {
 
 | Pattern | Application |
 |---------|-------------|
-| Template Method | Primary variation point for prompt template engine |
-| Builder | Secondary structure or creation |
+| Strategy | Swappable pipeline components |
+| Chain of Responsibility | Sequential processing stages |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** PromptEngine orchestrates; entities hold state
+- **O:** New behavior via new PromptRenderer impl
+- **D:** Depend on PromptRenderer interface
 
 ---
 
@@ -120,24 +148,32 @@ public class PromptTemplateService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: render()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as PromptEngine
+participant D as PromptTemplate
+U->>S: create()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `GenAIException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as PromptEngine
+U->>S: create(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `PromptTemplateService` core loop."
-
-Extension example: add new `RenderedPrompt` subclass or enum value + plug new Strategy at runtime.
+> "New `Strategy` implementation plugs in at runtime — no change to `PromptEngine`."
+>
+> "Add new `PromptTemplate` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -145,58 +181,60 @@ Extension example: add new `RenderedPrompt` subclass or enum value + plug new St
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Strategy | Strategy — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (GenAIException)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design prompt template engine starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Prompt Template Engine — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `PromptTemplate`, `TemplateEngine`, `VariableResolver`, `TemplateVersion`, `RenderedPrompt`. I'll group them into domain structure and a service facade."
+> "Entities: `PromptTemplate`, `TemplateContext`, `PromptRenderer`, `PromptValidator`. Domain structure separate from `PromptEngine` orchestration."
 >
-> "The variation point is Template Method — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design prompt templates with variables, conditionals, and partials."
 >
-> "Core API: `render(context)` — validate first, delegate to domain, return typed result."
+> "`PromptTemplate` — string template; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`TemplateContext` — variables; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`PromptRenderer` — fill slots; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`PromptEngine` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Strategy` in isolation?
+2. How would you extend Prompt Template Engine without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [Template Method pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Gen AI LLD memory map](../../05-genai-llm-lld/memory-map-genai-lld.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
 - [Java implementation](../../09-code-implementations/java/genai/prompt-template-engine/) (skeleton)
-
+- [HLD counterpart](../System%20Design%20-%20High%20Level%20Design/02-genai-llm-hld/questions/Q13-prompt-management.md)

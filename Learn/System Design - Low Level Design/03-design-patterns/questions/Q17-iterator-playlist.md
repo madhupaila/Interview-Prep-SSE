@@ -1,14 +1,25 @@
-# Iterator — Custom Playlist
+# Iterator — Playlist
 
 **Track:** Design Patterns  
-**Companies:** Spotify  
+**Companies:** Spotify, Apple  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-P17-iterator-playlist.md](../../../Case Studies/lld/design-patterns/CS-LLD-P17-iterator-playlist.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Iterator — Playlist domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Custom iterator over playlist with shuffle and repeat modes.
+Design custom iterator traversing playlist forward/backward/shuffle.
 
 ---
 
@@ -16,26 +27,27 @@ Custom iterator over playlist with shuffle and repeat modes.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Iterator — Playlist? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design custom iterator traversing playli? | Include in MVP — Design custom iterator traversing playlist forward |
+| 5 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 6 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for iterator — custom playlist
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- Execute game turns with rule validation
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via Iterator interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,47 +55,58 @@ Custom iterator over playlist with shuffle and repeat modes.
 
 | Entity | Role |
 |--------|------|
-| Playlist | Core domain entity / service |
-| PlaylistIterator | Core domain entity / service |
-| Song | Core domain entity / service |
-| PlaybackMode | Core domain entity / service |
+| `Playlist` | Aggregate |
+| `Iterator` | Interface |
+| `SequentialIterator` | Forward |
+| `ShuffleIterator` | Random order |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `Playlist`, `PlaylistIterator`, `Song`, `PlaybackMode`  
-**Verbs → methods:** `hasNext(), next()` and related operations
+**Nouns → classes:** `Playlist`, `Iterator`, `SequentialIterator`, `ShuffleIterator`  
+**Verbs → methods:** `addSong()`, `shuffle()`, `playNext()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  PlaylistService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +hasNext()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  PlaylistIterator   │──────>│ Iterator         │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteIterator │
+│  Playlist           │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Playlist     │────>│  PlaylistIterator  │
+│  Iterator           │────>│  SequentialIterator│
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +hasNext(), next()
+    class PlaylistIterator {
+        +void addSong(String playlistId, String songId)
+        +void shuffle(String playlistId)
+        +List<Song> playNext()
     }
-    class DomainRoot {
-        +execute()
+    class Playlist {
+        +addSong(Song) void
+        +shuffle() void
     }
-    class Strategy {
+    class Iterator {
         <<interface>>
-        +apply()
+        +apply() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class SequentialIterator {
+        +execute() void
+    }
+    class ShuffleIterator {
+        +execute() void
+    }
+    PlaylistIterator --> Playlist
 ```
 
 ---
@@ -91,9 +114,10 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class PlaylistService {
-    public Result hasNext(), next();
-    // Additional: validate, lookup, list as needed for Iterator — Custom Playlist
+public class PlaylistIterator {
+    public void addSong(String playlistId, String songId);
+    public void shuffle(String playlistId);
+    public List<Song> playNext();
 }
 ```
 
@@ -103,13 +127,12 @@ public class PlaylistService {
 
 | Pattern | Application |
 |---------|-------------|
-| Iterator | Primary variation point for iterator — custom playlist |
-
+| Iterator | Demonstrate Iterator pattern in iterator-playlist |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** PlaylistIterator orchestrates; entities hold state
+- **O:** New behavior via new Iterator impl
+- **D:** Depend on Iterator interface
 
 ---
 
@@ -119,24 +142,32 @@ public class PlaylistService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: hasNext()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as PlaylistIterator
+participant D as Playlist
+U->>S: addSong()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `DomainException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as PlaylistIterator
+U->>S: addSong(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `PlaylistService` core loop."
-
-Extension example: add new `PlaybackMode` subclass or enum value + plug new Strategy at runtime.
+> "New `Iterator` implementation plugs in at runtime — no change to `PlaylistIterator`."
+>
+> "Add new `Playlist` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -144,58 +175,58 @@ Extension example: add new `PlaybackMode` subclass or enum value + plug new Stra
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Iterator | Iterator — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (domain check)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design iterator — custom playlist starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Iterator — Playlist — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `Playlist`, `PlaylistIterator`, `Song`, `PlaybackMode`. I'll group them into domain structure and a service facade."
+> "Entities: `Playlist`, `Iterator`, `SequentialIterator`, `ShuffleIterator`. Domain structure separate from `PlaylistIterator` orchestration."
 >
-> "The variation point is Iterator — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design custom iterator traversing playlist forward/backward/shuffle."
 >
-> "Core API: `hasNext(), next()` — validate first, delegate to domain, return typed result."
+> "`Playlist` — aggregate; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`Iterator` — interface; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`SequentialIterator` — forward; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`PlaylistIterator` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Iterator` in isolation?
+2. How would you extend Iterator — Playlist without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [Iterator pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/patterns/iterator-playlist/) (skeleton)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/patterns/iterator-playlist/) (full)

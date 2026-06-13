@@ -6,9 +6,20 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-LLD-O37-auction-system.md](../../../Case Studies/lld/classic-ood/CS-LLD-O37-auction-system.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Auction System domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## 1. Problem Statement
 
-Design live auction: lots, bids, reserve price, winner determination.
+Design auction: place bid, anti-sniping, highest bidder wins.
 
 ---
 
@@ -16,26 +27,27 @@ Design live auction: lots, bids, reserve price, winner determination.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Auction System? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Bid increment? | Minimum raise rule |
+| 5 | Anti-sniping? | Extend end time on late bid |
+| 6 | Reserve price? | Optional hidden minimum |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for auction system
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- Place bids with validation and winner selection
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via BidValidator interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,49 +55,61 @@ Design live auction: lots, bids, reserve price, winner determination.
 
 | Entity | Role |
 |--------|------|
-| Auction | Core domain entity / service |
-| Lot | Core domain entity / service |
-| Bid | Core domain entity / service |
-| Bidder | Core domain entity / service |
-| Auctioneer | Core domain entity / service |
-| BiddingService | Core domain entity / service |
+| `Auction` | Listing + end time |
+| `Bid` | Amount + bidder |
+| `Bidder` | User |
+| `AuctionStatus` | OPEN/CLOSED |
+| `BidValidator` | Min increment |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `Auction`, `Lot`, `Bid`, `Bidder`, `Auctioneer`, `BiddingService`  
-**Verbs → methods:** `placeBid(lot, amount)` and related operations
+**Nouns → classes:** `Auction`, `Bid`, `Bidder`, `AuctionStatus`, `BidValidator`  
+**Verbs → methods:** `placeBid()`, `getHighestBid()`, `closeAuction()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  AuctionService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +placeBid()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  AuctionService     │──────>│ State            │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteState    │
+│  Auction            │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Auction     │────>│  Lot  │
+│  Bid                │────>│  Bidder          │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +placeBid(lot, amount)
+    class AuctionService {
+        +void placeBid(String lotId, BigDecimal amount)
+        +Bid getHighestBid(String lotId)
+        +void closeAuction(String lotId)
     }
-    class DomainRoot {
-        +execute()
+    class Auction {
+        +placeBid(Bid) void
+        +getWinner() Bidder
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class Bid {
+        +execute() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class Bidder {
+        +execute() void
+    }
+    class AuctionStatus {
+        +execute() void
+    }
+    class BidValidator {
+        +execute() void
+    }
+    AuctionService --> Auction
 ```
 
 ---
@@ -94,8 +118,9 @@ classDiagram
 
 ```java
 public class AuctionService {
-    public Result placeBid(lot, amount);
-    // Additional: validate, lookup, list as needed for Auction System
+    public void placeBid(String lotId, BigDecimal amount);
+    public Bid getHighestBid(String lotId);
+    public void closeAuction(String lotId);
 }
 ```
 
@@ -105,13 +130,12 @@ public class AuctionService {
 
 | Pattern | Application |
 |---------|-------------|
-| Observer | Primary variation point for auction system |
-| Strategy | Secondary structure or creation |
+| State | Lifecycle state transitions |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** AuctionService orchestrates; entities hold state
+- **O:** New behavior via new BidValidator impl
+- **D:** Depend on BidValidator interface
 
 ---
 
@@ -121,24 +145,32 @@ public class AuctionService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: placeBid()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as AuctionService
+participant D as Auction
+U->>S: placeBid()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `BidTooLowException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as AuctionService
+U->>S: placeBid(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `AuctionService` core loop."
-
-Extension example: add new `BiddingService` subclass or enum value + plug new Strategy at runtime.
+> "New `State` implementation plugs in at runtime — no change to `AuctionService`."
+>
+> "Add new `Auction` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -146,58 +178,58 @@ Extension example: add new `BiddingService` subclass or enum value + plug new St
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | State | State — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (BidTooLowException)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design auction system starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Auction System — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `Auction`, `Lot`, `Bid`, `Bidder`, `Auctioneer`, `BiddingService`. I'll group them into domain structure and a service facade."
+> "Entities: `Auction`, `Bid`, `Bidder`, `AuctionStatus`, `BidValidator`. Domain structure separate from `AuctionService` orchestration."
 >
-> "The variation point is Observer — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design auction: place bid, anti-sniping, highest bidder wins."
 >
-> "Core API: `placeBid(lot, amount)` — validate first, delegate to domain, return typed result."
+> "`Auction` — listing + end time; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`Bid` — amount + bidder; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`Bidder` — user; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`AuctionService` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `State` in isolation?
+2. How would you extend Auction System without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [Observer pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/classic/auction-system/) (skeleton)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/classic/auction-system/) (full)

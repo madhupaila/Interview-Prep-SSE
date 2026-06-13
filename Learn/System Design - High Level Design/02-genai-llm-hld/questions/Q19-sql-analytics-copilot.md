@@ -6,6 +6,17 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-G19-sql-analytics-copilot.md](../../../Case Studies/hld/genai/CS-HLD-G19-sql-analytics-copilot.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Real-world context modeled after Leading products in the Design SQL-Generating Analytics Copilot domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a production system for: **SQL-Generating Analytics Copilot**.

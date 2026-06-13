@@ -1,14 +1,25 @@
 # Comment Thread
 
 **Track:** Classic OOD  
-**Companies:** Reddit, Meta  
+**Companies:** Reddit, YouTube  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-O46-comment-thread.md](../../../Case Studies/lld/classic-ood/CS-LLD-O46-comment-thread.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Comment Thread domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Design nested comment threads on posts with reply and vote.
+Design nested comments: post, reply, edit, delete, sort top/new.
 
 ---
 
@@ -16,26 +27,30 @@ Design nested comment threads on posts with reply and vote.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Comment Thread? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design nested comments? | Include in MVP — Design nested comments |
+| 5 | Requirement: delete? | Include in MVP — delete |
+| 6 | Requirement: sort top/new.? | Include in MVP — sort top/new. |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for comment thread
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- CommentService handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via SortStrategy interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,48 +58,63 @@ Design nested comment threads on posts with reply and vote.
 
 | Entity | Role |
 |--------|------|
-| Post | Core domain entity / service |
-| Comment | Core domain entity / service |
-| CommentThread | Core domain entity / service |
-| Vote | Core domain entity / service |
-| CommentService | Core domain entity / service |
+| `Post` | Parent content |
+| `Comment` | Tree node |
+| `CommentThread` | Root collection |
+| `SortStrategy` | Top/new ordering |
+| `ModerationFlag` | Report |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `Post`, `Comment`, `CommentThread`, `Vote`, `CommentService`  
-**Verbs → methods:** `addComment(parent, text)` and related operations
+**Nouns → classes:** `Post`, `Comment`, `CommentThread`, `SortStrategy`, `ModerationFlag`  
+**Verbs → methods:** `getFeed()`, `createPost()`, `addReaction()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  PostService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +addComment()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  CommentService     │──────>│ Composite        │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteComposite│
+│  Post               │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Post     │────>│  Comment  │
+│  Comment            │────>│  CommentThread   │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +addComment(parent, text)
+    class CommentService {
+        +Feed getFeed(User user, Cursor cursor)
+        +Post createPost(User author, String content)
+        +void addReaction(String postId, Reaction reaction)
     }
-    class DomainRoot {
-        +execute()
+    class Post {
+        -content: String
+        +addReaction(Reaction) void
     }
-    class Strategy {
+    class Comment {
+        -text: String
+        +reply(String) Comment
+    }
+    class CommentThread {
+        +execute() void
+    }
+    class SortStrategy {
         <<interface>>
-        +apply()
+        +apply() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class ModerationFlag {
+        +execute() void
+    }
+    CommentService --> Post
 ```
 
 ---
@@ -92,9 +122,10 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class PostService {
-    public Result addComment(parent, text);
-    // Additional: validate, lookup, list as needed for Comment Thread
+public class CommentService {
+    public Feed getFeed(User user, Cursor cursor);
+    public Post createPost(User author, String content);
+    public void addReaction(String postId, Reaction reaction);
 }
 ```
 
@@ -104,13 +135,12 @@ public class PostService {
 
 | Pattern | Application |
 |---------|-------------|
-| Composite | Primary variation point for comment thread |
-| Tree | Secondary structure or creation |
+| Composite | Nested comments tree |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** CommentService orchestrates; entities hold state
+- **O:** New behavior via new SortStrategy impl
+- **D:** Depend on SortStrategy interface
 
 ---
 
@@ -120,24 +150,32 @@ public class PostService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: addComment()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as CommentService
+participant D as Post
+U->>S: getFeed()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `DeletedCommentException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as CommentService
+U->>S: getFeed(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `PostService` core loop."
-
-Extension example: add new `CommentService` subclass or enum value + plug new Strategy at runtime.
+> "New `Composite` implementation plugs in at runtime — no change to `CommentService`."
+>
+> "Add new `Post` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -145,59 +183,58 @@ Extension example: add new `CommentService` subclass or enum value + plug new St
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Composite | Composite — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (DeletedCommentException)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design comment thread starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Comment Thread — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `Post`, `Comment`, `CommentThread`, `Vote`, `CommentService`. I'll group them into domain structure and a service facade."
+> "Entities: `Post`, `Comment`, `CommentThread`, `SortStrategy`, `ModerationFlag`. Domain structure separate from `CommentService` orchestration."
 >
-> "The variation point is Composite — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design nested comments: post, reply, edit, delete, sort top/new."
 >
-> "Core API: `addComment(parent, text)` — validate first, delegate to domain, return typed result."
+> "`Post` — parent content; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`Comment` — tree node; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`CommentThread` — root collection; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`CommentService` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Composite` in isolation?
+2. How would you extend Comment Thread without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [Composite pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
 - [Java implementation](../../09-code-implementations/java/classic/comment-thread/) (skeleton)
-- HLD counterpart: [../System Design - High Level Design/03-classic-hld/questions/Q37-reddit-forum.md](../System Design - High Level Design/03-classic-hld/questions/Q37-reddit-forum.md)
-

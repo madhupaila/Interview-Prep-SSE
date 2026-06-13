@@ -1,14 +1,25 @@
-# Bridge — Remote and Device
+# Bridge — Remote Control
 
 **Track:** Design Patterns  
-**Companies:** LG, Samsung  
+**Companies:** Samsung, LG  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-P12-bridge-remote-control.md](../../../Case Studies/lld/design-patterns/CS-LLD-P12-bridge-remote-control.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Bridge — Remote Control domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Decouple remote abstraction from TV/Radio device implementation.
+Design bridge separating remote abstraction from device implementation.
 
 ---
 
@@ -16,26 +27,30 @@ Decouple remote abstraction from TV/Radio device implementation.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Bridge — Remote Control? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design bridge separating remote abstract? | Include in MVP — Design bridge separating remote abstraction from d |
+| 5 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 6 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for bridge — remote and device
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- RemoteBridge handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via Device interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,48 +58,61 @@ Decouple remote abstraction from TV/Radio device implementation.
 
 | Entity | Role |
 |--------|------|
-| Remote | Core domain entity / service |
-| Device | Core domain entity / service |
-| TV | Core domain entity / service |
-| Radio | Core domain entity / service |
-| AdvancedRemote | Core domain entity / service |
-
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
+| `Remote` | Abstraction |
+| `Device` | Implementor |
+| `TV` | Device impl |
+| `Radio` | Device impl |
+| `AdvancedRemote` | Extended abstraction |
 
 **Nouns → classes:** `Remote`, `Device`, `TV`, `Radio`, `AdvancedRemote`  
-**Verbs → methods:** `togglePower()` and related operations
+**Verbs → methods:** `create()`, `getById()`, `listAll()`, `delete()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  RemoteService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +togglePower()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  RemoteBridge       │──────>│ Bridge           │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteBridge   │
+│  Remote             │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Remote     │────>│  Device  │
+│  Device             │────>│  TV              │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +togglePower()
+    class RemoteBridge {
+        +void create(Remote entity)
+        +Optional<Remote> getById(String id)
+        +List<Remote> listAll()
+        +void delete(String id)
     }
-    class DomainRoot {
-        +execute()
+    class Remote {
+        +execute() void
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class Device {
+        +execute() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class TV {
+        +execute() void
+    }
+    class Radio {
+        +execute() void
+    }
+    class AdvancedRemote {
+        +execute() void
+    }
+    RemoteBridge --> Remote
 ```
 
 ---
@@ -92,9 +120,11 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class RemoteService {
-    public Result togglePower();
-    // Additional: validate, lookup, list as needed for Bridge — Remote and Device
+public class RemoteBridge {
+    public void create(Remote entity);
+    public Optional<Remote> getById(String id);
+    public List<Remote> listAll();
+    public void delete(String id);
 }
 ```
 
@@ -104,13 +134,12 @@ public class RemoteService {
 
 | Pattern | Application |
 |---------|-------------|
-| Bridge | Primary variation point for bridge — remote and device |
-
+| Bridge | Demonstrate Bridge pattern in bridge-remote-control |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** RemoteBridge orchestrates; entities hold state
+- **O:** New behavior via new Device impl
+- **D:** Depend on Device interface
 
 ---
 
@@ -120,24 +149,32 @@ public class RemoteService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: togglePower()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as RemoteBridge
+participant D as Remote
+U->>S: create()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `DomainException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as RemoteBridge
+U->>S: create(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `RemoteService` core loop."
-
-Extension example: add new `AdvancedRemote` subclass or enum value + plug new Strategy at runtime.
+> "New `Bridge` implementation plugs in at runtime — no change to `RemoteBridge`."
+>
+> "Add new `Remote` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -145,58 +182,58 @@ Extension example: add new `AdvancedRemote` subclass or enum value + plug new St
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Bridge | Bridge — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (domain check)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design bridge — remote and device starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Bridge — Remote Control — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `Remote`, `Device`, `TV`, `Radio`, `AdvancedRemote`. I'll group them into domain structure and a service facade."
+> "Entities: `Remote`, `Device`, `TV`, `Radio`, `AdvancedRemote`. Domain structure separate from `RemoteBridge` orchestration."
 >
-> "The variation point is Bridge — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design bridge separating remote abstraction from device implementation."
 >
-> "Core API: `togglePower()` — validate first, delegate to domain, return typed result."
+> "`Remote` — abstraction; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`Device` — implementor; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`TV` — device impl; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`RemoteBridge` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Bridge` in isolation?
+2. How would you extend Bridge — Remote Control without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [Bridge pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/patterns/bridge-remote-control/) (skeleton)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/patterns/bridge-remote-control/) (full)

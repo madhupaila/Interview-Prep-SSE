@@ -1,14 +1,25 @@
 # Cache-Aside Pattern (Object)
 
 **Track:** Classic OOD  
-**Companies:** Amazon, Google  
+**Companies:** Amazon, Redis Labs  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-O63-cache-aside-ood.md](../../../Case Studies/lld/classic-ood/CS-LLD-O63-cache-aside-ood.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Redis cache-aside at object level. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Design cache-aside wrapper around data store interface in-process.
+Design cache-aside loader: read-through, write-invalidate, stampede guard.
 
 ---
 
@@ -16,26 +27,30 @@ Design cache-aside wrapper around data store interface in-process.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Cache-Aside Pattern (Object)? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design cache-aside loader? | Include in MVP — Design cache-aside loader |
+| 5 | Requirement: read-through? | Include in MVP — read-through |
+| 6 | Requirement: write-invalidate? | Include in MVP — write-invalidate |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for cache-aside pattern (object)
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- CacheAsideService handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via CacheLoader interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,48 +58,61 @@ Design cache-aside wrapper around data store interface in-process.
 
 | Entity | Role |
 |--------|------|
-| Cache | Core domain entity / service |
-| DataStore | Core domain entity / service |
-| CacheAsideService | Core domain entity / service |
-| CachePolicy | Core domain entity / service |
-| Loader | Core domain entity / service |
+| `Cache` | Fast store |
+| `DataStore` | Authoritative DB |
+| `CacheLoader` | Miss handler |
+| `CacheKey` | Lookup id |
+| `InvalidationPolicy` | TTL/event |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `Cache`, `DataStore`, `CacheAsideService`, `CachePolicy`, `Loader`  
-**Verbs → methods:** `get(key)` and related operations
+**Nouns → classes:** `Cache`, `DataStore`, `CacheLoader`, `CacheKey`, `InvalidationPolicy`  
+**Verbs → methods:** `get()`, `put()`, `size()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  CacheService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +get()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  CacheAsideService  │──────>│ Strategy         │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteStrategy │
+│  Cache              │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Cache     │────>│  DataStore  │
+│  DataStore          │────>│  CacheLoader     │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +get(key)
+    class CacheAsideService {
+        +V get(K key)
+        +void put(K key, V value)
+        +int size()
     }
-    class DomainRoot {
-        +execute()
+    class Cache {
+        +execute() void
     }
-    class Strategy {
+    class DataStore {
+        +execute() void
+    }
+    class CacheLoader {
+        +execute() void
+    }
+    class CacheKey {
+        +execute() void
+    }
+    class InvalidationPolicy {
         <<interface>>
-        +apply()
+        +apply() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    CacheAsideService --> Cache
 ```
 
 ---
@@ -92,9 +120,10 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class CacheService {
-    public Result get(key);
-    // Additional: validate, lookup, list as needed for Cache-Aside Pattern (Object)
+public class CacheAsideService {
+    public V get(K key);
+    public void put(K key, V value);
+    public int size();
 }
 ```
 
@@ -104,13 +133,13 @@ public class CacheService {
 
 | Pattern | Application |
 |---------|-------------|
-| Decorator | Primary variation point for cache-aside pattern (object) |
-| Proxy | Secondary structure or creation |
+| Strategy | Swappable algorithms |
+| Repository | Persistence abstraction |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** CacheAsideService orchestrates; entities hold state
+- **O:** New behavior via new CacheLoader impl
+- **D:** Depend on CacheLoader interface
 
 ---
 
@@ -120,24 +149,32 @@ public class CacheService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: get()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as CacheAsideService
+participant D as Cache
+U->>S: get()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `CacheMissException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as CacheAsideService
+U->>S: get(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `CacheService` core loop."
-
-Extension example: add new `Loader` subclass or enum value + plug new Strategy at runtime.
+> "New `Strategy` implementation plugs in at runtime — no change to `CacheAsideService`."
+>
+> "Add new `Cache` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -145,58 +182,58 @@ Extension example: add new `Loader` subclass or enum value + plug new Strategy a
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Strategy | Strategy — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (CacheMissException)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design cache-aside pattern (object) starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Cache-Aside Pattern (Object) — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `Cache`, `DataStore`, `CacheAsideService`, `CachePolicy`, `Loader`. I'll group them into domain structure and a service facade."
+> "Entities: `Cache`, `DataStore`, `CacheLoader`, `CacheKey`, `InvalidationPolicy`. Domain structure separate from `CacheAsideService` orchestration."
 >
-> "The variation point is Decorator — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design cache-aside loader: read-through, write-invalidate, stampede guard."
 >
-> "Core API: `get(key)` — validate first, delegate to domain, return typed result."
+> "`Cache` — fast store; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`DataStore` — authoritative db; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`CacheLoader` — miss handler; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`CacheAsideService` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Strategy` in isolation?
+2. How would you extend Cache-Aside Pattern (Object) without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [Decorator pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/classic/cache-aside-ood/) (skeleton)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/classic/cache-aside-ood/) (full)

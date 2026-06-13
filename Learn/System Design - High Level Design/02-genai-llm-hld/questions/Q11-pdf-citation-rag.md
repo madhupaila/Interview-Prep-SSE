@@ -6,6 +6,17 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-G11-pdf-citation-rag.md](../../../Case Studies/hld/genai/CS-HLD-G11-pdf-citation-rag.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Real-world context modeled after Harvey AI legal RAG with precise citations. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a production system for: **PDF Ingestion + Citation RAG**.

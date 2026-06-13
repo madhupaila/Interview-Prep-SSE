@@ -1,14 +1,26 @@
-# 1:1 Messenger
+# Messenger (1:1 Chat)
 
 **Track:** Classic OOD  
-**Companies:** Meta, WhatsApp, Google  
+**Companies:** Meta, WhatsApp, Slack  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-O24-messenger-1to1.md](../../../Case Studies/lld/classic-ood/CS-LLD-O24-messenger-1to1.md)
+> **End-to-end pair:** [WhatsApp / 1:1 Messenger](../../../Case Studies/paired/CS-PAIR-05-whatsapp-messenger.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after WhatsApp message delivery states. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Design 1:1 chat object model: users, conversations, messages, read receipts.
+Design 1:1 messaging: send, deliver, read receipts, conversation threads.
 
 ---
 
@@ -16,26 +28,26 @@ Design 1:1 chat object model: users, conversations, messages, read receipts.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Messenger (1:1 Chat)? | Core entities + 2 primary user flows |
+| 2 | Persistence required? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded access? | Yes if multiple users/gates — else single-threaded |
+| 4 | Group chat? | Extension — 1:1 MVP |
+| 5 | Message order? | Per-conversation FIFO |
+| 6 | Read receipts? | Per-message DeliveryStatus enum |
+| 7 | Offline delivery? | Queue extension — in-memory MVP |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for 1:1 messenger
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- Send messages with delivery status tracking
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via MessageStore interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,49 +55,65 @@ Design 1:1 chat object model: users, conversations, messages, read receipts.
 
 | Entity | Role |
 |--------|------|
-| User | Core domain entity / service |
-| Conversation | Core domain entity / service |
-| Message | Core domain entity / service |
-| MessageStatus | Core domain entity / service |
-| ChatService | Core domain entity / service |
-| MessageRepository | Core domain entity / service |
+| `User` | Participant |
+| `Conversation` | Two-user thread |
+| `Message` | Text payload |
+| `DeliveryStatus` | Sent/delivered/read |
+| `Inbox` | Conversation list |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `User`, `Conversation`, `Message`, `MessageStatus`, `ChatService`, `MessageRepository`  
-**Verbs → methods:** `sendMessage(conv, text)` and related operations
+**Nouns → classes:** `User`, `Conversation`, `Message`, `DeliveryStatus`, `Inbox`  
+**Verbs → methods:** `sendMessage()`, `getOrCreateConversation()`, `markRead()`, `getHistory()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  UserService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +sendMessage()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  MessageService     │──────>│ Repository       │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteRepository│
+│  User               │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  User     │────>│  Conversation  │
+│  Conversation       │────>│  Message         │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +sendMessage(conv, text)
+    class MessageService {
+        +Message sendMessage(String conversationId, String text)
+        +Conversation getOrCreateConversation(User a, User b)
+        +void markRead(String messageId)
+        +List<Message> getHistory(String conversationId)
     }
-    class DomainRoot {
-        +execute()
+    class User {
+        -id: String
+        -name: String
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class Conversation {
+        -participants: Pair<User>
+        -messages: List
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class Message {
+        -text: String
+        -status: DeliveryStatus
+        +markRead() void
+    }
+    class DeliveryStatus {
+        +execute() void
+    }
+    class Inbox {
+        +execute() void
+    }
+    MessageService --> User
 ```
 
 ---
@@ -93,9 +121,11 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class UserService {
-    public Result sendMessage(conv, text);
-    // Additional: validate, lookup, list as needed for 1:1 Messenger
+public class MessageService {
+    public Message sendMessage(String conversationId, String text);
+    public Conversation getOrCreateConversation(User a, User b);
+    public void markRead(String messageId);
+    public List<Message> getHistory(String conversationId);
 }
 ```
 
@@ -105,13 +135,12 @@ public class UserService {
 
 | Pattern | Application |
 |---------|-------------|
-| Repository | Primary variation point for 1:1 messenger |
-| Observer | Secondary structure or creation |
+| Repository | Message persistence abstraction |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** MessageService orchestrates; entities hold state
+- **O:** New behavior via new MessageStore impl
+- **D:** Depend on MessageStore interface
 
 ---
 
@@ -121,24 +150,29 @@ public class UserService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: sendMessage()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant A as UserA
+participant S as MessageService
+participant C as Conversation
+A->>S: sendMessage(convId, text)
+S->>C: append(message)
+S-->>A: Message
 ```
 
-**Failure path:** Invalid input → throw `UserNotFoundException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+A->>S: sendMessage(invalidConv)
+S-->>U: ConversationNotFoundException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `UserService` core loop."
-
-Extension example: add new `MessageRepository` subclass or enum value + plug new Strategy at runtime.
+> "New `Repository` implementation plugs in at runtime — no change to `MessageService`."
+>
+> "Add new `User` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -146,59 +180,58 @@ Extension example: add new `MessageRepository` subclass or enum value + plug new
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Storage | in-memory list | Repository | Repository interface |
+| Ordering | timestamp | sequence ID | sequence — strict order |
+| Group chat | extend Conversation | new model | extend with type enum |
+| Delivery | fire-and-forget | ack/retry | status enum MVP |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (UserNotFoundException)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design 1:1 messenger starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Messenger (1:1 Chat) — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `User`, `Conversation`, `Message`, `MessageStatus`, `ChatService`, `MessageRepository`. I'll group them into domain structure and a service facade."
+> "Entities: `User`, `Conversation`, `Message`, `DeliveryStatus`, `Inbox`. Domain structure separate from `MessageService` orchestration."
 >
-> "The variation point is Repository — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design 1:1 messaging: send, deliver, read receipts, conversation threads."
 >
-> "Core API: `sendMessage(conv, text)` — validate first, delegate to domain, return typed result."
+> "`User` — participant; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`Conversation` — two-user thread; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`Message` — text payload; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`MessageService` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Repository` in isolation?
+2. How would you extend Messenger (1:1 Chat) without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [Repository pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/classic/messenger-1to1/) (skeleton)
-- HLD counterpart: [../System Design - High Level Design/03-classic-hld/questions/Q04-whatsapp-messenger.md](../System Design - High Level Design/03-classic-hld/questions/Q04-whatsapp-messenger.md)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/classic/messenger-1to1/) (full)

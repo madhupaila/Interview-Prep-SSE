@@ -1,14 +1,25 @@
-# Library Management
+# Library Management System
 
 **Track:** Classic OOD  
-**Companies:** Amazon, Infosys, TCS  
+**Companies:** Amazon, Google, Microsoft  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-O03-library-management.md](../../../Case Studies/lld/classic-ood/CS-LLD-O03-library-management.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after OCLC library catalog systems. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Design a library system: catalog books, member checkout/return, fine calculation.
+Design a library: catalog books, member accounts, checkout/return, reservations, fines.
 
 ---
 
@@ -16,26 +27,30 @@ Design a library system: catalog books, member checkout/return, fine calculation
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | Physical or digital books? | Physical copies with ISBN; e-books extension |
+| 2 | Multiple branches? | Single library MVP; branchId extension |
+| 3 | Loan period? | 14 days default; configurable per item type |
+| 4 | Reservation queue? | Yes — FIFO when all copies checked out |
+| 5 | Fine calculation? | Per day overdue; FineStrategy injectable |
+| 6 | Librarian roles? | Member vs Librarian for catalog edits |
+| 7 | Concurrent checkout desks? | Yes — synchronize per BookItem |
+| 8 | Search scope? | By title, author, ISBN |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for library management
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- Checkout BookItem to Member if available and loan limit OK
+- Return item, compute overdue fine, notify reservation queue
+- Reserve Book when no copies available — FIFO queue
+- Librarian add/remove catalog items
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via FineStrategy interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,49 +58,74 @@ Design a library system: catalog books, member checkout/return, fine calculation
 
 | Entity | Role |
 |--------|------|
-| Library | Core domain entity / service |
-| Book | Core domain entity / service |
-| BookItem | Core domain entity / service |
-| Member | Core domain entity / service |
-| LendingService | Core domain entity / service |
-| Catalog | Core domain entity / service |
+| `Library` | Catalog root |
+| `Book` | Metadata |
+| `BookItem` | Physical copy |
+| `Member` | Borrower |
+| `ReservationQueue` | FIFO waitlist |
+| `FineStrategy` | Overdue fees |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `Library`, `Book`, `BookItem`, `Member`, `LendingService`, `Catalog`, `FineCalculator`  
-**Verbs → methods:** `checkout(member, book)` and related operations
+**Nouns → classes:** `Library`, `Book`, `BookItem`, `Member`, `ReservationQueue`, `FineStrategy`  
+**Verbs → methods:** `checkout(member, barcode)`, `returnItem(barcode)`, `reserve(member, isbn)`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  LibraryService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +checkout()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  LendingService     │──────>│ Strategy         │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteStrategy │
+│  Library            │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Library     │────>│  Book  │
+│  Book               │────>│  BookItem        │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +checkout(member, book)
+    class LendingService {
+        +Loan checkout(Member member, String barcode)
+        +void returnItem(String barcode)
+        +void reserve(Member member, String isbn)
+        +BigDecimal calculateFine(Loan loan)
     }
-    class DomainRoot {
-        +execute()
+    class Library {
+        -catalog: Map
+        +addBook(Book) void
+        +findByIsbn(String) Book
     }
-    class Strategy {
+    class Book {
+        -isbn: String
+        -title: String
+        -author: String
+    }
+    class BookItem {
+        -barcode: String
+        +checkout(Member) void
+        +returnItem() void
+    }
+    class Member {
+        -id: String
+        +getActiveLoans() List
+    }
+    class ReservationQueue {
+        +enqueue(Member, String) void
+        +pollNext(String) Member
+    }
+    class FineStrategy {
         <<interface>>
-        +apply()
+        +calculate(Loan) BigDecimal
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    LendingService --> Library
 ```
 
 ---
@@ -93,9 +133,11 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class LibraryService {
-    public Result checkout(member, book);
-    // Additional: validate, lookup, list as needed for Library Management
+public class LendingService {
+    public Loan checkout(Member member, String barcode);
+    public void returnItem(String barcode);
+    public void reserve(Member member, String isbn);
+    public BigDecimal calculateFine(Loan loan);
 }
 ```
 
@@ -105,13 +147,13 @@ public class LibraryService {
 
 | Pattern | Application |
 |---------|-------------|
-| Factory | Primary variation point for library management |
-| Strategy | Secondary structure or creation |
+| Strategy | Fine calculation policies |
+| Observer | Notify when reserved book available |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** LendingService orchestrates; entities hold state
+- **O:** New behavior via new FineStrategy impl
+- **D:** Depend on FineStrategy interface
 
 ---
 
@@ -121,24 +163,36 @@ public class LibraryService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: checkout()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant M as Member
+participant L as LendingService
+participant BI as BookItem
+M->>L: checkout(barcode)
+L->>BI: isAvailable()
+BI-->>L: true
+L->>BI: markBorrowed(member)
+L-->>M: Loan receipt
 ```
 
-**Failure path:** Invalid input → throw `BookNotAvailableException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant M as Member
+participant L as LendingService
+participant BI as BookItem
+M->>L: checkout(barcode)
+L->>BI: isAvailable()
+BI-->>L: false
+L-->>M: ItemUnavailableException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `LibraryService` core loop."
-
-Extension example: add new `FineCalculator` subclass or enum value + plug new Strategy at runtime.
+> "New `Strategy` implementation plugs in at runtime — no change to `LendingService`."
+>
+> "Add new `Library` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -146,58 +200,54 @@ Extension example: add new `FineCalculator` subclass or enum value + plug new St
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Strategy | Strategy — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (BookNotAvailableException)
+- Synchronize checkout/return on BookItem — prevent double borrow
+- Return unknown barcode → NotFoundException
+- Reserve when copies exist → reject or auto-checkout per policy
+- Concurrent return + checkout on same item — lock per BookItem
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design library management starting with clarifying scope — in-memory, single process, core flows only."
+> "Library owns Book metadata and physical BookItem copies with unique barcodes."
 >
-> "Entities I see: `Library`, `Book`, `BookItem`, `Member`, `LendingService`, `Catalog`, `FineCalculator`. I'll group them into domain structure and a service facade."
+> "Member borrows a BookItem, not an abstract Book — one copy one borrower."
 >
-> "The variation point is Factory — for example different policies or algorithms without changing the orchestration loop."
+> "checkout validates membership, item availability, and per-member loan limit."
 >
-> "Core API: `checkout(member, book)` — validate first, delegate to domain, return typed result."
+> "return computes overdue days via FineStrategy, frees item, wakes ReservationQueue."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "ReservationQueue is FIFO per ISBN — fair ordering when copy returns."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "CatalogService separated from LendingService — ISP for librarian operations."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "FineStrategy injected — daily rate vs flat fee without changing return loop."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "HLD: catalog in DB, search via Elasticsearch; LLD entities map cleanly."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How to support inter-library loan?
+2. Design notification when reserved book becomes available?
+3. How to handle lost book replacement fees?
+4. Index structure for fast ISBN lookup?
 
 ---
 
 ## 14. Related Links
 
-- [Factory pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/classic/library-management/) (skeleton)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/classic/library-management/) (full)

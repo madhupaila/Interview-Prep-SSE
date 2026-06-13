@@ -1,14 +1,25 @@
-# Logger System
+# Logger / Log Aggregator
 
 **Track:** Classic OOD  
-**Companies:** Microsoft, Google  
+**Companies:** Splunk, Datadog, Amazon  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-O15-logger.md](../../../Case Studies/lld/classic-ood/CS-LLD-O15-logger.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Logger / Log Aggregator domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Design extensible logger with levels and multiple appenders (file, console).
+Design leveled logger with multiple appenders (console, file) and formatting.
 
 ---
 
@@ -16,26 +27,30 @@ Design extensible logger with levels and multiple appenders (file, console).
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Logger / Log Aggregator? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design leveled logger with multiple appe? | Include in MVP — Design leveled logger with multiple appenders (con |
+| 5 | Requirement: file) and formatting.? | Include in MVP — file) and formatting. |
+| 6 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for logger system
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- Logger handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via LogAppender interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,49 +58,61 @@ Design extensible logger with levels and multiple appenders (file, console).
 
 | Entity | Role |
 |--------|------|
-| Logger | Core domain entity / service |
-| LogLevel | Core domain entity / service |
-| LogAppender | Core domain entity / service |
-| FileAppender | Core domain entity / service |
-| ConsoleAppender | Core domain entity / service |
-| LogMessage | Core domain entity / service |
+| `Logger` | Facade |
+| `LogLevel` | DEBUG..ERROR |
+| `LogAppender` | Output sink |
+| `ConsoleAppender` | Stdout |
+| `FileAppender` | Disk |
+| `Formatter` | Pattern layout |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `Logger`, `LogLevel`, `LogAppender`, `FileAppender`, `ConsoleAppender`, `LogMessage`  
-**Verbs → methods:** `log(level, message)` and related operations
+**Nouns → classes:** `Logger`, `LogLevel`, `LogAppender`, `ConsoleAppender`, `FileAppender`, `Formatter`  
+**Verbs → methods:** `log()`, `addAppender()`, `setLevel()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  LoggerService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +log()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  Logger             │──────>│ Chain of Responsibility │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteChain of Responsibility│
+│  Logger             │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Logger     │────>│  LogLevel  │
+│  LogLevel           │────>│  LogAppender     │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +log(level, message)
+    class Logger {
+        +void log(LogLevel level, String message)
+        +void addAppender(LogAppender appender)
+        +void setLevel(LogLevel minLevel)
     }
-    class DomainRoot {
-        +execute()
+    class LogLevel {
+        +execute() void
     }
-    class Strategy {
+    class LogAppender {
         <<interface>>
-        +apply()
+        +append(LogMessage) void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class ConsoleAppender {
+        +execute() void
+    }
+    class FileAppender {
+        +execute() void
+    }
+    class Formatter {
+        +execute() void
+    }
 ```
 
 ---
@@ -93,9 +120,10 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class LoggerService {
-    public Result log(level, message);
-    // Additional: validate, lookup, list as needed for Logger System
+public class Logger {
+    public void log(LogLevel level, String message);
+    public void addAppender(LogAppender appender);
+    public void setLevel(LogLevel minLevel);
 }
 ```
 
@@ -105,13 +133,13 @@ public class LoggerService {
 
 | Pattern | Application |
 |---------|-------------|
-| Chain of Responsibility | Primary variation point for logger system |
-| Observer | Secondary structure or creation |
+| Chain of Responsibility | Log level filtering |
+| Observer | Multiple appenders |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** Logger orchestrates; entities hold state
+- **O:** New behavior via new LogAppender impl
+- **D:** Depend on LogAppender interface
 
 ---
 
@@ -121,24 +149,32 @@ public class LoggerService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: log()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as Logger
+participant D as Logger
+U->>S: log()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `DomainException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as Logger
+U->>S: log(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `LoggerService` core loop."
-
-Extension example: add new `LogMessage` subclass or enum value + plug new Strategy at runtime.
+> "New appender: implement LogAppender — file, syslog, remote without changing Logger."
+>
+> "Custom formatter: pluggable Formatter per appender."
 
 ---
 
@@ -146,59 +182,58 @@ Extension example: add new `LogMessage` subclass or enum value + plug new Strate
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Chain of Responsibility | Chain of Responsibility — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (domain check)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design logger system starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Logger / Log Aggregator — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `Logger`, `LogLevel`, `LogAppender`, `FileAppender`, `ConsoleAppender`, `LogMessage`. I'll group them into domain structure and a service facade."
+> "Entities: `Logger`, `LogLevel`, `LogAppender`, `ConsoleAppender`, `FileAppender`, `Formatter`. Domain structure separate from `Logger` orchestration."
 >
-> "The variation point is Chain of Responsibility — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design leveled logger with multiple appenders (console, file) and formatting."
 >
-> "Core API: `log(level, message)` — validate first, delegate to domain, return typed result."
+> "`Logger` — facade; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`LogLevel` — debug..error; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`LogAppender` — output sink; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`Logger` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Chain of Responsibility` in isolation?
+2. How would you extend Logger / Log Aggregator without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [Chain of Responsibility pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
 - [Java implementation](../../09-code-implementations/java/classic/logger/) (full)
-- HLD counterpart: [../System Design - High Level Design/03-classic-hld/questions/Q22-logging-system.md](../System Design - High Level Design/03-classic-hld/questions/Q22-logging-system.md)
-

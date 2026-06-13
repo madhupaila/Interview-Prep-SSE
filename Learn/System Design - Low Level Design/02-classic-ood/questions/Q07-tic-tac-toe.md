@@ -1,14 +1,25 @@
 # Tic-Tac-Toe
 
 **Track:** Classic OOD  
-**Companies:** Microsoft, Amazon  
+**Companies:** Amazon, Google  
 **Difficulty:** Easy  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-O07-tic-tac-toe.md](../../../Case Studies/lld/classic-ood/CS-LLD-O07-tic-tac-toe.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Tic-Tac-Toe domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Design tic-tac-toe for two players on NxN board (classic 3x3).
+Design tic-tac-toe for two players with win/draw detection on NxN board.
 
 ---
 
@@ -16,26 +27,27 @@ Design tic-tac-toe for two players on NxN board (classic 3x3).
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Tic-Tac-Toe? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design tic-tac-toe for two players with ? | Include in MVP — Design tic-tac-toe for two players with win/draw d |
+| 5 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 6 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for tic-tac-toe
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- Execute game turns with rule validation
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via WinChecker interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,48 +55,59 @@ Design tic-tac-toe for two players on NxN board (classic 3x3).
 
 | Entity | Role |
 |--------|------|
-| Board | Core domain entity / service |
-| Player | Core domain entity / service |
-| Game | Core domain entity / service |
-| Symbol | Core domain entity / service |
-| WinChecker | Core domain entity / service |
+| `Board` | NxN grid |
+| `Player` | X or O |
+| `Game` | Match state |
+| `WinChecker` | Row/col/diag scan |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `Board`, `Player`, `Game`, `Symbol`, `WinChecker`  
-**Verbs → methods:** `playMove(row, col)` and related operations
+**Nouns → classes:** `Board`, `Player`, `Game`, `WinChecker`  
+**Verbs → methods:** `create()`, `getById()`, `listAll()`, `delete()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  BoardService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +playMove()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  GameService        │──────>│ Strategy         │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteStrategy │
+│  Board              │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Board     │────>│  Player  │
+│  Player             │────>│  Game            │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +playMove(row, col)
+    class GameService {
+        +void create(Board entity)
+        +Optional<Board> getById(String id)
+        +List<Board> listAll()
+        +void delete(String id)
     }
-    class DomainRoot {
-        +execute()
+    class Board {
+        -cells: Cell[][]
+        +getPiece(int,int) Piece
+        +movePiece(Move) void
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class Player {
+        +execute() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class Game {
+        +execute() void
+    }
+    class WinChecker {
+        +execute() void
+    }
+    GameService --> Board
 ```
 
 ---
@@ -92,9 +115,11 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class BoardService {
-    public Result playMove(row, col);
-    // Additional: validate, lookup, list as needed for Tic-Tac-Toe
+public class GameService {
+    public void create(Board entity);
+    public Optional<Board> getById(String id);
+    public List<Board> listAll();
+    public void delete(String id);
 }
 ```
 
@@ -104,13 +129,12 @@ public class BoardService {
 
 | Pattern | Application |
 |---------|-------------|
-| Strategy | Primary variation point for tic-tac-toe |
-
+| Strategy | Win detection algorithm |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** GameService orchestrates; entities hold state
+- **O:** New behavior via new WinChecker impl
+- **D:** Depend on WinChecker interface
 
 ---
 
@@ -120,24 +144,32 @@ public class BoardService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: playMove()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as GameService
+participant D as Board
+U->>S: create()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `InvalidMoveException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as GameService
+U->>S: create(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `BoardService` core loop."
-
-Extension example: add new `WinChecker` subclass or enum value + plug new Strategy at runtime.
+> "New `Strategy` implementation plugs in at runtime — no change to `GameService`."
+>
+> "Add new `Board` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -145,51 +177,52 @@ Extension example: add new `WinChecker` subclass or enum value + plug new Strate
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Strategy | Strategy — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (InvalidMoveException)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design tic-tac-toe starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Tic-Tac-Toe — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `Board`, `Player`, `Game`, `Symbol`, `WinChecker`. I'll group them into domain structure and a service facade."
+> "Entities: `Board`, `Player`, `Game`, `WinChecker`. Domain structure separate from `GameService` orchestration."
 >
-> "The variation point is Strategy — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design tic-tac-toe for two players with win/draw detection on NxN board."
 >
-> "Core API: `playMove(row, col)` — validate first, delegate to domain, return typed result."
+> "`Board` — nxn grid; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`Player` — x or o; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`Game` — match state; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`GameService` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Strategy` in isolation?
+2. How would you extend Tic-Tac-Toe without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
@@ -197,6 +230,5 @@ Extension example: add new `WinChecker` subclass or enum value + plug new Strate
 
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
 - [Java implementation](../../09-code-implementations/java/classic/tic-tac-toe/) (full)
-

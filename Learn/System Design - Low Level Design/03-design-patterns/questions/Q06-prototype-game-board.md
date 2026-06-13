@@ -1,14 +1,25 @@
 # Prototype — Game Board Clone
 
 **Track:** Design Patterns  
-**Companies:** EA, Zynga  
+**Companies:** EA, Unity  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-P06-prototype-game-board.md](../../../Case Studies/lld/design-patterns/CS-LLD-P06-prototype-game-board.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Prototype — Game Board Clone domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Design prototype pattern to clone game board states.
+Design prototype pattern to clone complex game boards for save/replay.
 
 ---
 
@@ -16,26 +27,27 @@ Design prototype pattern to clone game board states.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Prototype — Game Board Clone? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design prototype pattern to clone comple? | Include in MVP — Design prototype pattern to clone complex game boa |
+| 5 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 6 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for prototype — game board clone
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- Execute game turns with rule validation
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via GameBoard interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,47 +55,58 @@ Design prototype pattern to clone game board states.
 
 | Entity | Role |
 |--------|------|
-| GameBoard | Core domain entity / service |
-| Cell | Core domain entity / service |
-| Prototype | Core domain entity / service |
-| BoardRegistry | Core domain entity / service |
+| `GameBoard` | Prototype |
+| `Cell` | Board cell |
+| `BoardRegistry` | Template cache |
+| `Cloneable` | Copy interface |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `GameBoard`, `Cell`, `Prototype`, `BoardRegistry`  
-**Verbs → methods:** `clone()` and related operations
+**Nouns → classes:** `GameBoard`, `Cell`, `BoardRegistry`, `Cloneable`  
+**Verbs → methods:** `create()`, `getById()`, `listAll()`, `delete()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  GameBoardService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +clone()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  BoardPrototype     │──────>│ Prototype        │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcretePrototype│
+│  GameBoard          │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  GameBoard     │────>│  Cell  │
+│  Cell               │────>│  BoardRegistry   │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +clone()
+    class BoardPrototype {
+        +void create(GameBoard entity)
+        +Optional<GameBoard> getById(String id)
+        +List<GameBoard> listAll()
+        +void delete(String id)
     }
-    class DomainRoot {
-        +execute()
+    class GameBoard {
+        +execute() void
     }
-    class Strategy {
+    class Cell {
+        +execute() void
+    }
+    class BoardRegistry {
+        +execute() void
+    }
+    class Cloneable {
         <<interface>>
-        +apply()
+        +apply() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    BoardPrototype --> GameBoard
 ```
 
 ---
@@ -91,9 +114,11 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class GameBoardService {
-    public Result clone();
-    // Additional: validate, lookup, list as needed for Prototype — Game Board Clone
+public class BoardPrototype {
+    public void create(GameBoard entity);
+    public Optional<GameBoard> getById(String id);
+    public List<GameBoard> listAll();
+    public void delete(String id);
 }
 ```
 
@@ -103,13 +128,12 @@ public class GameBoardService {
 
 | Pattern | Application |
 |---------|-------------|
-| Prototype | Primary variation point for prototype — game board clone |
-
+| Prototype | Demonstrate Prototype pattern in prototype-game-board |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** BoardPrototype orchestrates; entities hold state
+- **O:** New behavior via new GameBoard impl
+- **D:** Depend on GameBoard interface
 
 ---
 
@@ -119,24 +143,32 @@ public class GameBoardService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: clone()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as BoardPrototype
+participant D as GameBoard
+U->>S: create()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `DomainException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as BoardPrototype
+U->>S: create(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `GameBoardService` core loop."
-
-Extension example: add new `BoardRegistry` subclass or enum value + plug new Strategy at runtime.
+> "New `Prototype` implementation plugs in at runtime — no change to `BoardPrototype`."
+>
+> "Add new `GameBoard` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -144,58 +176,58 @@ Extension example: add new `BoardRegistry` subclass or enum value + plug new Str
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Prototype | Prototype — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (domain check)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design prototype — game board clone starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Prototype — Game Board Clone — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `GameBoard`, `Cell`, `Prototype`, `BoardRegistry`. I'll group them into domain structure and a service facade."
+> "Entities: `GameBoard`, `Cell`, `BoardRegistry`, `Cloneable`. Domain structure separate from `BoardPrototype` orchestration."
 >
-> "The variation point is Prototype — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design prototype pattern to clone complex game boards for save/replay."
 >
-> "Core API: `clone()` — validate first, delegate to domain, return typed result."
+> "`GameBoard` — prototype; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`Cell` — board cell; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`BoardRegistry` — template cache; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`BoardPrototype` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Prototype` in isolation?
+2. How would you extend Prototype — Game Board Clone without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [Prototype pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/patterns/prototype-game-board/) (skeleton)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/patterns/prototype-game-board/) (full)

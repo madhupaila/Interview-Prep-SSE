@@ -6,6 +6,18 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-C02-twitter-feed.md](../../../Case Studies/hld/classic/CS-HLD-C02-twitter-feed.md)
+> **End-to-end pair:** [Twitter News Feed](../../../Case Studies/paired/CS-PAIR-06-twitter-news-feed.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Real-world context modeled after Twitter/X and LinkedIn feed — fan-out on write vs read. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a social media home timeline: users follow others, see tweets in reverse chronological or ranked feed.

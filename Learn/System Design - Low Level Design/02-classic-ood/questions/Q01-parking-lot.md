@@ -6,6 +6,18 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-LLD-O01-parking-lot.md](../../../Case Studies/lld/classic-ood/CS-LLD-O01-parking-lot.md)
+> **End-to-end pair:** [Parking Lot at Scale](../../../Case Studies/paired/CS-PAIR-02-parking-lot-at-scale.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Design the **in-process object model** for a multi-floor garage: motorcycles, cars, trucks; multiple entry gates concurrent; ticket on entry, payment on exit.
+
+**Key constraints:** Scope, Concurrency, Extensibility
+
+---
+
 ## 1. Problem Statement
 
 Design a parking lot with multiple floors and spot types (compact, large, handicap). Support vehicle entry (park), exit (unpark), and display availability. Optional: payment on exit.

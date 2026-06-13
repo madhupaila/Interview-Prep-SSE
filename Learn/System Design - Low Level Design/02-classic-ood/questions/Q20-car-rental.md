@@ -1,14 +1,25 @@
 # Car Rental System
 
 **Track:** Classic OOD  
-**Companies:** Hertz, Amazon, Uber  
+**Companies:** Hertz, Amazon, Enterprise  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-O20-car-rental.md](../../../Case Studies/lld/classic-ood/CS-LLD-O20-car-rental.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Car Rental System domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Design car rental: inventory, reservation, pickup, return, pricing.
+Design car rental: fleet, reservations, pickup/return, pricing.
 
 ---
 
@@ -16,26 +27,27 @@ Design car rental: inventory, reservation, pickup, return, pricing.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Car Rental System? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design car rental? | Include in MVP — Design car rental |
+| 5 | Requirement: reservations? | Include in MVP — reservations |
+| 6 | Requirement: pickup/return? | Include in MVP — pickup/return |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for car rental system
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- Create and cancel reservations with conflict checks
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via PricingStrategy interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,49 +55,61 @@ Design car rental: inventory, reservation, pickup, return, pricing.
 
 | Entity | Role |
 |--------|------|
-| Vehicle | Core domain entity / service |
-| Reservation | Core domain entity / service |
-| RentalLocation | Core domain entity / service |
-| RentalService | Core domain entity / service |
-| PricingStrategy | Core domain entity / service |
-| Invoice | Core domain entity / service |
+| `RentalAgency` | Fleet owner |
+| `Vehicle` | Rentable car |
+| `Reservation` | Date range booking |
+| `Customer` | Renter |
+| `Invoice` | Charges |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `Vehicle`, `Reservation`, `RentalLocation`, `RentalService`, `PricingStrategy`, `Invoice`  
-**Verbs → methods:** `reserve(vehicle, dates)` and related operations
+**Nouns → classes:** `RentalAgency`, `Vehicle`, `Reservation`, `Customer`, `Invoice`  
+**Verbs → methods:** `create()`, `cancel()`, `searchAvailable()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  VehicleService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +reserve()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  RentalService      │──────>│ Strategy         │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteStrategy │
+│  RentalAgency       │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Vehicle     │────>│  Reservation  │
+│  Vehicle            │────>│  Reservation     │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +reserve(vehicle, dates)
+    class RentalService {
+        +Booking create(Guest guest, Room room, LocalDateRange dates)
+        +void cancel(String bookingId)
+        +List<Room> searchAvailable(RoomType type, LocalDateRange dates)
     }
-    class DomainRoot {
-        +execute()
+    class RentalAgency {
+        +execute() void
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class Vehicle {
+        -type: VehicleType
+        -licensePlate: String
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class Reservation {
+        +execute() void
+    }
+    class Customer {
+        +execute() void
+    }
+    class Invoice {
+        +execute() void
+    }
+    RentalService --> RentalAgency
 ```
 
 ---
@@ -93,9 +117,10 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class VehicleService {
-    public Result reserve(vehicle, dates);
-    // Additional: validate, lookup, list as needed for Car Rental System
+public class RentalService {
+    public Booking create(Guest guest, Room room, LocalDateRange dates);
+    public void cancel(String bookingId);
+    public List<Room> searchAvailable(RoomType type, LocalDateRange dates);
 }
 ```
 
@@ -105,13 +130,12 @@ public class VehicleService {
 
 | Pattern | Application |
 |---------|-------------|
-| Strategy | Primary variation point for car rental system |
-| Factory | Secondary structure or creation |
+| Strategy | Variation point in Car Rental System |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** RentalService orchestrates; entities hold state
+- **O:** New behavior via new PricingStrategy impl
+- **D:** Depend on PricingStrategy interface
 
 ---
 
@@ -121,24 +145,32 @@ public class VehicleService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: reserve()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as RentalService
+participant D as RentalAgency
+U->>S: create()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `VehicleUnavailableException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as RentalService
+U->>S: create(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `VehicleService` core loop."
-
-Extension example: add new `Invoice` subclass or enum value + plug new Strategy at runtime.
+> "New `Strategy` implementation plugs in at runtime — no change to `RentalService`."
+>
+> "Add new `RentalAgency` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -146,51 +178,52 @@ Extension example: add new `Invoice` subclass or enum value + plug new Strategy 
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Strategy | Strategy — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (VehicleUnavailableException)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design car rental system starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Car Rental System — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `Vehicle`, `Reservation`, `RentalLocation`, `RentalService`, `PricingStrategy`, `Invoice`. I'll group them into domain structure and a service facade."
+> "Entities: `RentalAgency`, `Vehicle`, `Reservation`, `Customer`, `Invoice`. Domain structure separate from `RentalService` orchestration."
 >
-> "The variation point is Strategy — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design car rental: fleet, reservations, pickup/return, pricing."
 >
-> "Core API: `reserve(vehicle, dates)` — validate first, delegate to domain, return typed result."
+> "`RentalAgency` — fleet owner; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`Vehicle` — rentable car; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`Reservation` — date range booking; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`RentalService` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Strategy` in isolation?
+2. How would you extend Car Rental System without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
@@ -198,6 +231,5 @@ Extension example: add new `Invoice` subclass or enum value + plug new Strategy 
 
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/classic/car-rental/) (skeleton)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/classic/car-rental/) (full)

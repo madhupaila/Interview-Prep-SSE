@@ -6,6 +6,17 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-G20-legal-contract-analysis.md](../../../Case Studies/hld/genai/CS-HLD-G20-legal-contract-analysis.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Real-world context modeled after Harvey and Ironclad — contract clause extraction. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a production system for: **Legal Contract Analysis System**.

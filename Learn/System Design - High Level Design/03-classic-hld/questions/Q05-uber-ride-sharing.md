@@ -6,6 +6,18 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-C05-uber-ride-sharing.md](../../../Case Studies/hld/classic/CS-HLD-C05-uber-ride-sharing.md)
+> **End-to-end pair:** [Uber Ride Sharing](../../../Case Studies/paired/CS-PAIR-12-uber-ride-sharing.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Real-world context modeled after Uber and Lyft — real-time matching and trip lifecycle. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a scalable system for: **Uber / Ride Sharing**.

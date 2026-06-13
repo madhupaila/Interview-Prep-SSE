@@ -1,14 +1,25 @@
-# Friend Request System
+# Friend Request Flow
 
 **Track:** Classic OOD  
-**Companies:** Meta, Snapchat  
-**Difficulty:** Easy  
+**Companies:** Meta, LinkedIn  
+**Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-O45-friend-request.md](../../../Case Studies/lld/classic-ood/CS-LLD-O45-friend-request.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Friend Request Flow domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Design friend request workflow: send, accept, reject, block.
+Design friend requests: send, accept, reject, block, pending state.
 
 ---
 
@@ -16,26 +27,27 @@ Design friend request workflow: send, accept, reject, block.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Friend Request Flow? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design friend requests? | Include in MVP — Design friend requests |
+| 5 | Requirement: accept? | Include in MVP — accept |
+| 6 | Requirement: reject? | Include in MVP — reject |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for friend request system
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- Send messages with delivery status tracking
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via RequestValidator interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,48 +55,62 @@ Design friend request workflow: send, accept, reject, block.
 
 | Entity | Role |
 |--------|------|
-| User | Core domain entity / service |
-| FriendRequest | Core domain entity / service |
-| RequestStatus | Core domain entity / service |
-| FriendService | Core domain entity / service |
-| BlockList | Core domain entity / service |
+| `User` | Account |
+| `FriendRequest` | Pending invite |
+| `Friendship` | Mutual link |
+| `BlockList` | Blocked users |
+| `RequestStatus` | PENDING/ACCEPTED |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `User`, `FriendRequest`, `RequestStatus`, `FriendService`, `BlockList`  
-**Verbs → methods:** `acceptRequest(requestId)` and related operations
+**Nouns → classes:** `User`, `FriendRequest`, `Friendship`, `BlockList`, `RequestStatus`  
+**Verbs → methods:** `create()`, `getById()`, `listAll()`, `delete()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  UserService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +acceptRequest()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  FriendService      │──────>│ State            │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteState    │
+│  User               │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  User     │────>│  FriendRequest  │
+│  FriendRequest      │────>│  Friendship      │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +acceptRequest(requestId)
+    class FriendService {
+        +void create(User entity)
+        +Optional<User> getById(String id)
+        +List<User> listAll()
+        +void delete(String id)
     }
-    class DomainRoot {
-        +execute()
+    class User {
+        -id: String
+        -name: String
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class FriendRequest {
+        +execute() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class Friendship {
+        +execute() void
+    }
+    class BlockList {
+        +execute() void
+    }
+    class RequestStatus {
+        +execute() void
+    }
+    FriendService --> User
 ```
 
 ---
@@ -92,9 +118,11 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class UserService {
-    public Result acceptRequest(requestId);
-    // Additional: validate, lookup, list as needed for Friend Request System
+public class FriendService {
+    public void create(User entity);
+    public Optional<User> getById(String id);
+    public List<User> listAll();
+    public void delete(String id);
 }
 ```
 
@@ -104,13 +132,12 @@ public class UserService {
 
 | Pattern | Application |
 |---------|-------------|
-| State | Primary variation point for friend request system |
-
+| State | Lifecycle state transitions |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** FriendService orchestrates; entities hold state
+- **O:** New behavior via new RequestValidator impl
+- **D:** Depend on RequestValidator interface
 
 ---
 
@@ -120,24 +147,32 @@ public class UserService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: acceptRequest()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as FriendService
+participant D as User
+U->>S: create()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `RequestNotFoundException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as FriendService
+U->>S: create(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `UserService` core loop."
-
-Extension example: add new `BlockList` subclass or enum value + plug new Strategy at runtime.
+> "New `State` implementation plugs in at runtime — no change to `FriendService`."
+>
+> "Add new `User` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -145,58 +180,58 @@ Extension example: add new `BlockList` subclass or enum value + plug new Strateg
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | State | State — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (RequestNotFoundException)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design friend request system starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Friend Request Flow — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `User`, `FriendRequest`, `RequestStatus`, `FriendService`, `BlockList`. I'll group them into domain structure and a service facade."
+> "Entities: `User`, `FriendRequest`, `Friendship`, `BlockList`, `RequestStatus`. Domain structure separate from `FriendService` orchestration."
 >
-> "The variation point is State — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design friend requests: send, accept, reject, block, pending state."
 >
-> "Core API: `acceptRequest(requestId)` — validate first, delegate to domain, return typed result."
+> "`User` — account; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`FriendRequest` — pending invite; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`Friendship` — mutual link; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`FriendService` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `State` in isolation?
+2. How would you extend Friend Request Flow without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [State pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
 - [Java implementation](../../09-code-implementations/java/classic/friend-request/) (skeleton)
-

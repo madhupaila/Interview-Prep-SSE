@@ -6,6 +6,18 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-G15-content-moderation-llm.md](../../../Case Studies/hld/genai/CS-HLD-G15-content-moderation-llm.md)
+> **End-to-end pair:** [Content Moderation for LLM Apps](../../../Case Studies/paired/CS-PAIR-16-content-moderation-llm.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Real-world context modeled after Leading products in the Design Content Moderation for LLM Apps domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a production system for: **Content Moderation for LLM Apps**.

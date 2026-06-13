@@ -6,6 +6,17 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-G39-llm-powered-search-engine.md](../../../Case Studies/hld/genai/CS-HLD-G39-llm-powered-search-engine.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Real-world context modeled after Google Search — crawl, index, rank, serve. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a production system for: **LLM-Powered Search Engine**.

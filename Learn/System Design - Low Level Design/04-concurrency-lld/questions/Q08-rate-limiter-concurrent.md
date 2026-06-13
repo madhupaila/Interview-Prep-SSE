@@ -1,14 +1,26 @@
 # Rate Limiter (Concurrent)
 
 **Track:** Concurrency LLD  
-**Companies:** Stripe, Google  
+**Companies:** Stripe, Cloudflare  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-X08-rate-limiter-concurrent.md](../../../Case Studies/lld/concurrency/CS-LLD-X08-rate-limiter-concurrent.md)
+> **End-to-end pair:** [Distributed Rate Limiter](../../../Case Studies/paired/CS-PAIR-18-distributed-rate-limiter.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Stripe rate limiter and Envoy local rate limit. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Thread-safe token bucket rate limiter for API gateway in-process.
+Design distributed-safe token bucket rate limiter with atomic updates.
 
 ---
 
@@ -16,26 +28,31 @@ Thread-safe token bucket rate limiter for API gateway in-process.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Rate Limiter (Concurrent)? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Lock vs synchronized? | Justify choice |
+| 5 | Deadlock prevention? | Ordering or timeout |
+| 6 | Fairness? | Document starvation risk |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for rate limiter (concurrent)
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- ConcurrentRateLimiter handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Thread safety:** synchronized refill
+- Open-Closed via TokenBucket interface at variation points
+- Constructor injection for testability
+- Correctness under concurrent access — no data races
+- Avoid deadlock — consistent lock ordering where multiple locks
 
 ---
 
@@ -43,46 +60,56 @@ Thread-safe token bucket rate limiter for API gateway in-process.
 
 | Entity | Role |
 |--------|------|
-| TokenBucketRateLimiter | Core domain entity / service |
-| AtomicLong | Core domain entity / service |
-| Lock | Core domain entity / service |
+| `RateLimiter` | Facade |
+| `TokenBucket` | Atomic tokens |
+| `Clock` | Time source |
+| `ClientKey` | Limiter key |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `TokenBucketRateLimiter`, `AtomicLong`, `Lock`  
-**Verbs → methods:** `tryAcquire()` and related operations
+**Nouns → classes:** `RateLimiter`, `TokenBucket`, `Clock`, `ClientKey`  
+**Verbs → methods:** `allowRequest()`, `reset()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  TokenBucketRateLimiterService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +tryAcquire()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  ConcurrentRateLimiter│──────>│ Concurrency      │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteConcurrency│
+│  RateLimiter        │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  TokenBucketRateLimiter     │────>│  AtomicLong  │
+│  TokenBucket        │────>│  Clock           │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +tryAcquire()
+    class ConcurrentRateLimiter {
+        +boolean allowRequest(String clientKey)
+        +void reset(String clientKey)
     }
-    class DomainRoot {
-        +execute()
+    class RateLimiter {
+        +allowRequest(String) boolean
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class TokenBucket {
+        -tokens: double
+        +tryConsume() boolean
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class Clock {
+        +execute() void
+    }
+    class ClientKey {
+        +execute() void
+    }
+    ConcurrentRateLimiter --> RateLimiter
 ```
 
 ---
@@ -90,9 +117,9 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class TokenBucketRateLimiterService {
-    public Result tryAcquire();
-    // Additional: validate, lookup, list as needed for Rate Limiter (Concurrent)
+public class ConcurrentRateLimiter {
+    public boolean allowRequest(String clientKey);
+    public void reset(String clientKey);
 }
 ```
 
@@ -102,13 +129,13 @@ public class TokenBucketRateLimiterService {
 
 | Pattern | Application |
 |---------|-------------|
-| Strategy | Primary variation point for rate limiter (concurrent) |
-
+| Concurrency | Thread-safe design for Rate Limiter (Concurrent) |
+| Synchronization | Locks, volatile, or concurrent collections |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** ConcurrentRateLimiter orchestrates; entities hold state
+- **O:** New behavior via new TokenBucket impl
+- **D:** Depend on TokenBucket interface
 
 ---
 
@@ -118,24 +145,32 @@ public class TokenBucketRateLimiterService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: tryAcquire()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as ConcurrentRateLimiter
+participant D as RateLimiter
+U->>S: allowRequest()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `ConcurrencyException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as ConcurrentRateLimiter
+U->>S: allowRequest(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `TokenBucketRateLimiterService` core loop."
-
-Extension example: add new `Lock` subclass or enum value + plug new Strategy at runtime.
+> "New `Concurrency` implementation plugs in at runtime — no change to `ConcurrentRateLimiter`."
+>
+> "Add new `RateLimiter` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -143,58 +178,59 @@ Extension example: add new `Lock` subclass or enum value + plug new Strategy at 
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Concurrency | Concurrency — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Thread safety:** synchronized refill
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (ConcurrencyException)
+- Identify shared mutable state across threads
+- Use synchronized, Lock, or concurrent collections appropriately
+- Avoid deadlock — consistent lock acquisition order
+- Document happens-before relationships for interview clarity
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design rate limiter (concurrent) starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Rate Limiter (Concurrent) — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `TokenBucketRateLimiter`, `AtomicLong`, `Lock`. I'll group them into domain structure and a service facade."
+> "Entities: `RateLimiter`, `TokenBucket`, `Clock`, `ClientKey`. Domain structure separate from `ConcurrentRateLimiter` orchestration."
 >
-> "The variation point is Strategy — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design distributed-safe token bucket rate limiter with atomic updates."
 >
-> "Core API: `tryAcquire()` — validate first, delegate to domain, return typed result."
+> "`RateLimiter` — facade; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`TokenBucket` — atomic tokens; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`Clock` — time source; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`ConcurrentRateLimiter` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Concurrency` in isolation?
+2. How would you extend Rate Limiter (Concurrent) without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
+- [Concurrency LLD track](../../04-concurrency-lld/README.md)
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
 - [Java implementation](../../09-code-implementations/java/concurrency/rate-limiter-concurrent/) (full)
-

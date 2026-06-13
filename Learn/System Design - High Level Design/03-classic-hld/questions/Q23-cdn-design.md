@@ -6,6 +6,17 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-C23-cdn-design.md](../../../Case Studies/hld/classic/CS-HLD-C23-cdn-design.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Real-world context modeled after CloudFront and Akamai edge caching. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a scalable system for: **CDN**.

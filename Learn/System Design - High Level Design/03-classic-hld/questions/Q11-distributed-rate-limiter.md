@@ -6,6 +6,18 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-C11-distributed-rate-limiter.md](../../../Case Studies/hld/classic/CS-HLD-C11-distributed-rate-limiter.md)
+> **End-to-end pair:** [Distributed Rate Limiter](../../../Case Studies/paired/CS-PAIR-18-distributed-rate-limiter.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Real-world context modeled after Stripe rate limiter and Envoy local rate limit. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a scalable system for: **Distributed Rate Limiter**.

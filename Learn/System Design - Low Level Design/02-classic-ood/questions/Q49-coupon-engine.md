@@ -1,14 +1,25 @@
 # Coupon Engine
 
 **Track:** Classic OOD  
-**Companies:** Amazon, Stripe  
+**Companies:** Amazon, Shopify  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-O49-coupon-engine.md](../../../Case Studies/lld/classic-ood/CS-LLD-O49-coupon-engine.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Coupon Engine domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Design coupon/discount engine: rules, stacking, validation at checkout.
+Design coupon engine: percent/fixed off, min cart, expiry, stack rules.
 
 ---
 
@@ -16,26 +27,30 @@ Design coupon/discount engine: rules, stacking, validation at checkout.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Coupon Engine? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design coupon engine? | Include in MVP — Design coupon engine |
+| 5 | Requirement: percent/fixed off? | Include in MVP — percent/fixed off |
+| 6 | Requirement: min cart? | Include in MVP — min cart |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for coupon engine
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- CouponService handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via PromotionRule interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,48 +58,61 @@ Design coupon/discount engine: rules, stacking, validation at checkout.
 
 | Entity | Role |
 |--------|------|
-| Coupon | Core domain entity / service |
-| DiscountRule | Core domain entity / service |
-| Cart | Core domain entity / service |
-| CouponEngine | Core domain entity / service |
-| ValidationResult | Core domain entity / service |
+| `Coupon` | Code + rules |
+| `Cart` | Order context |
+| `Discount` | Applied amount |
+| `CouponValidator` | Eligibility |
+| `PromotionRule` | Business logic |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `Coupon`, `DiscountRule`, `Cart`, `CouponEngine`, `ValidationResult`  
-**Verbs → methods:** `applyCoupon(cart, code)` and related operations
+**Nouns → classes:** `Coupon`, `Cart`, `Discount`, `CouponValidator`, `PromotionRule`  
+**Verbs → methods:** `addItem()`, `removeItem()`, `checkout()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  CouponService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +applyCoupon()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  CouponService      │──────>│ Mediator         │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteMediator │
+│  Coupon             │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Coupon     │────>│  DiscountRule  │
+│  Cart               │────>│  Discount        │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +applyCoupon(cart, code)
+    class CouponService {
+        +void addItem(String sku, int qty)
+        +void removeItem(String sku)
+        +CheckoutResult checkout()
     }
-    class DomainRoot {
-        +execute()
+    class Coupon {
+        -code: String
+        +isValid(Cart) boolean
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class Cart {
+        +execute() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class Discount {
+        +execute() void
+    }
+    class CouponValidator {
+        +execute() void
+    }
+    class PromotionRule {
+        +execute() void
+    }
+    CouponService --> Coupon
 ```
 
 ---
@@ -93,8 +121,9 @@ classDiagram
 
 ```java
 public class CouponService {
-    public Result applyCoupon(cart, code);
-    // Additional: validate, lookup, list as needed for Coupon Engine
+    public void addItem(String sku, int qty);
+    public void removeItem(String sku);
+    public CheckoutResult checkout();
 }
 ```
 
@@ -104,13 +133,12 @@ public class CouponService {
 
 | Pattern | Application |
 |---------|-------------|
-| Strategy | Primary variation point for coupon engine |
-| Chain of Responsibility | Secondary structure or creation |
+| Mediator | Decoupled communication |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** CouponService orchestrates; entities hold state
+- **O:** New behavior via new PromotionRule impl
+- **D:** Depend on PromotionRule interface
 
 ---
 
@@ -120,24 +148,32 @@ public class CouponService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: applyCoupon()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as CouponService
+participant D as Coupon
+U->>S: addItem()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `InvalidCouponException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as CouponService
+U->>S: addItem(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `CouponService` core loop."
-
-Extension example: add new `ValidationResult` subclass or enum value + plug new Strategy at runtime.
+> "New `Mediator` implementation plugs in at runtime — no change to `CouponService`."
+>
+> "Add new `Coupon` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -145,51 +181,52 @@ Extension example: add new `ValidationResult` subclass or enum value + plug new 
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Mediator | Mediator — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (InvalidCouponException)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design coupon engine starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Coupon Engine — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `Coupon`, `DiscountRule`, `Cart`, `CouponEngine`, `ValidationResult`. I'll group them into domain structure and a service facade."
+> "Entities: `Coupon`, `Cart`, `Discount`, `CouponValidator`, `PromotionRule`. Domain structure separate from `CouponService` orchestration."
 >
-> "The variation point is Strategy — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design coupon engine: percent/fixed off, min cart, expiry, stack rules."
 >
-> "Core API: `applyCoupon(cart, code)` — validate first, delegate to domain, return typed result."
+> "`Coupon` — code + rules; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`Cart` — order context; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`Discount` — applied amount; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`CouponService` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Mediator` in isolation?
+2. How would you extend Coupon Engine without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
@@ -197,6 +234,5 @@ Extension example: add new `ValidationResult` subclass or enum value + plug new 
 
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/classic/coupon-engine/) (skeleton)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/classic/coupon-engine/) (full)

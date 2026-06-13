@@ -6,6 +6,17 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-C41-linkedin-connections.md](../../../Case Studies/hld/classic/CS-HLD-C41-linkedin-connections.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Real-world context modeled after LinkedIn BFS connection suggestions. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a scalable system for: **LinkedIn Connections**.

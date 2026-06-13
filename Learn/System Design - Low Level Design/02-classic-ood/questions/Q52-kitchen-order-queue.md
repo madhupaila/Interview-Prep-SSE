@@ -1,14 +1,25 @@
 # Kitchen Order Queue
 
 **Track:** Classic OOD  
-**Companies:** Restaurants, Toast  
+**Companies:** Restaurant POS  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-O52-kitchen-order-queue.md](../../../Case Studies/lld/classic-ood/CS-LLD-O52-kitchen-order-queue.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Kitchen Order Queue domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Design kitchen display queue: orders by priority, prep stations.
+Design kitchen display queue: order priority, prep stations, bump bar.
 
 ---
 
@@ -16,26 +27,27 @@ Design kitchen display queue: orders by priority, prep stations.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Kitchen Order Queue? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design kitchen display queue? | Include in MVP — Design kitchen display queue |
+| 5 | Requirement: order priority? | Include in MVP — order priority |
+| 6 | Requirement: prep stations? | Include in MVP — prep stations |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for kitchen order queue
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- Execute game turns with rule validation
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via PriorityStrategy interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,48 +55,62 @@ Design kitchen display queue: orders by priority, prep stations.
 
 | Entity | Role |
 |--------|------|
-| Order | Core domain entity / service |
-| KitchenTicket | Core domain entity / service |
-| PrepStation | Core domain entity / service |
-| OrderQueue | Core domain entity / service |
-| PriorityComparator | Core domain entity / service |
+| `KitchenQueue` | Order pipeline |
+| `OrderTicket` | Kitchen card |
+| `Station` | Grill/salad |
+| `PriorityStrategy` | Rush first |
+| `OrderStatus` | PREP/DONE |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `Order`, `KitchenTicket`, `PrepStation`, `OrderQueue`, `PriorityComparator`  
-**Verbs → methods:** `enqueueOrder(order)` and related operations
+**Nouns → classes:** `KitchenQueue`, `OrderTicket`, `Station`, `PriorityStrategy`, `OrderStatus`  
+**Verbs → methods:** `create()`, `getById()`, `listAll()`, `delete()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  OrderService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +enqueueOrder()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  KitchenService     │──────>│ Strategy         │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteStrategy │
+│  KitchenQueue       │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Order     │────>│  KitchenTicket  │
+│  OrderTicket        │────>│  Station         │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +enqueueOrder(order)
+    class KitchenService {
+        +void create(KitchenQueue entity)
+        +Optional<KitchenQueue> getById(String id)
+        +List<KitchenQueue> listAll()
+        +void delete(String id)
     }
-    class DomainRoot {
-        +execute()
+    class KitchenQueue {
+        +execute() void
     }
-    class Strategy {
+    class OrderTicket {
+        +execute() void
+    }
+    class Station {
+        +execute() void
+    }
+    class PriorityStrategy {
         <<interface>>
-        +apply()
+        +apply() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class OrderStatus {
+        +execute() void
+    }
+    KitchenService --> KitchenQueue
 ```
 
 ---
@@ -92,9 +118,11 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class OrderService {
-    public Result enqueueOrder(order);
-    // Additional: validate, lookup, list as needed for Kitchen Order Queue
+public class KitchenService {
+    public void create(KitchenQueue entity);
+    public Optional<KitchenQueue> getById(String id);
+    public List<KitchenQueue> listAll();
+    public void delete(String id);
 }
 ```
 
@@ -104,13 +132,14 @@ public class OrderService {
 
 | Pattern | Application |
 |---------|-------------|
-| Priority Queue | Primary variation point for kitchen order queue |
-| Observer | Secondary structure or creation |
+| Strategy | Swappable algorithms |
+| State | Lifecycle state transitions |
+| Queue | FIFO ordering of work items |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** KitchenService orchestrates; entities hold state
+- **O:** New behavior via new PriorityStrategy impl
+- **D:** Depend on PriorityStrategy interface
 
 ---
 
@@ -120,24 +149,32 @@ public class OrderService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: enqueueOrder()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as KitchenService
+participant D as KitchenQueue
+U->>S: create()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `DomainException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as KitchenService
+U->>S: create(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `OrderService` core loop."
-
-Extension example: add new `PriorityComparator` subclass or enum value + plug new Strategy at runtime.
+> "New `Strategy` implementation plugs in at runtime — no change to `KitchenService`."
+>
+> "Add new `KitchenQueue` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -145,58 +182,58 @@ Extension example: add new `PriorityComparator` subclass or enum value + plug ne
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Strategy | Strategy — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (domain check)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design kitchen order queue starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Kitchen Order Queue — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `Order`, `KitchenTicket`, `PrepStation`, `OrderQueue`, `PriorityComparator`. I'll group them into domain structure and a service facade."
+> "Entities: `KitchenQueue`, `OrderTicket`, `Station`, `PriorityStrategy`, `OrderStatus`. Domain structure separate from `KitchenService` orchestration."
 >
-> "The variation point is Priority Queue — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design kitchen display queue: order priority, prep stations, bump bar."
 >
-> "Core API: `enqueueOrder(order)` — validate first, delegate to domain, return typed result."
+> "`KitchenQueue` — order pipeline; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`OrderTicket` — kitchen card; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`Station` — grill/salad; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`KitchenService` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Strategy` in isolation?
+2. How would you extend Kitchen Order Queue without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [Priority Queue pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
 - [Java implementation](../../09-code-implementations/java/classic/kitchen-order-queue/) (skeleton)
-

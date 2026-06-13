@@ -6,6 +6,18 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-C29-online-judge-leetcode.md](../../../Case Studies/hld/classic/CS-HLD-C29-online-judge-leetcode.md)
+> **End-to-end pair:** [Online Judge (LeetCode)](../../../Case Studies/paired/CS-PAIR-14-online-judge.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Real-world context modeled after LeetCode judge workers and sandbox. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a scalable system for: **Online Judge (LeetCode)**.

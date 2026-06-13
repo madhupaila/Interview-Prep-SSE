@@ -1,14 +1,25 @@
 # ATM Machine
 
 **Track:** Classic OOD  
-**Companies:** Citibank, JP Morgan, Amazon  
+**Companies:** Citibank, Amazon, Wells Fargo  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-O11-atm.md](../../../Case Studies/lld/classic-ood/CS-LLD-O11-atm.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after NCR ATM transaction and cash dispensing. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Design ATM: card auth, balance check, withdraw, deposit.
+Design ATM: card auth, PIN, balance, withdraw, deposit, transfer.
 
 ---
 
@@ -16,26 +27,30 @@ Design ATM: card auth, balance check, withdraw, deposit.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | Single ATM or bank network? | Single terminal MVP; network extension |
+| 2 | Card authentication? | Insert card + 4-digit PIN |
+| 3 | Supported operations? | Withdraw, deposit, balance inquiry, transfer |
+| 4 | Cash denominations? | Configurable — $20 bills default in dispenser |
+| 5 | Daily withdraw limit? | Per-account limit enforced |
+| 6 | Concurrent sessions? | One active session per ATM |
+| 7 | Receipt printing? | Optional ReceiptPrinter interface |
+| 8 | Persistence? | In-memory BankAccount registry |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for atm machine
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- Authenticate card + PIN before any transaction
+- Withdraw if sufficient balance and CashDispenser has notes
+- Deposit increases balance without dispensing
+- Transfer between accounts at same bank
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via TransactionStrategy interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,49 +58,66 @@ Design ATM: card auth, balance check, withdraw, deposit.
 
 | Entity | Role |
 |--------|------|
-| ATM | Core domain entity / service |
-| Card | Core domain entity / service |
-| Account | Core domain entity / service |
-| Transaction | Core domain entity / service |
-| CashDispenser | Core domain entity / service |
-| BankService | Core domain entity / service |
+| `ATM` | Terminal |
+| `BankAccount` | Balance |
+| `Card` | Auth token |
+| `Transaction` | Audit record |
+| `CashDispenser` | Notes out |
+| `AuthenticationService` | PIN check |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `ATM`, `Card`, `Account`, `Transaction`, `CashDispenser`, `BankService`  
-**Verbs → methods:** `withdraw(amount)` and related operations
+**Nouns → classes:** `ATM`, `BankAccount`, `Card`, `Transaction`, `CashDispenser`, `AuthenticationService`  
+**Verbs → methods:** `authenticate(card, pin)`, `withdraw(amount)`, `deposit(amount)`, `transfer(to, amount)`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  ATMService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +withdraw()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  ATMService         │──────>│ State            │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteState    │
+│  ATM                │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  ATM     │────>│  Card  │
+│  BankAccount        │────>│  Card            │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +withdraw(amount)
+    class ATMService {
+        +Session authenticate(Card card, String pin)
+        +void withdraw(BigDecimal amount)
+        +void deposit(BigDecimal amount)
+        +BigDecimal getBalance()
+        +void transfer(BankAccount to, BigDecimal amount)
     }
-    class DomainRoot {
-        +execute()
+    class ATM {
+        +execute() void
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class BankAccount {
+        +execute() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class Card {
+        +execute() void
+    }
+    class Transaction {
+        +execute() void
+    }
+    class CashDispenser {
+        +execute() void
+    }
+    class AuthenticationService {
+        +execute() void
+    }
+    ATMService --> ATM
 ```
 
 ---
@@ -94,8 +126,11 @@ classDiagram
 
 ```java
 public class ATMService {
-    public Result withdraw(amount);
-    // Additional: validate, lookup, list as needed for ATM Machine
+    public Session authenticate(Card card, String pin);
+    public void withdraw(BigDecimal amount);
+    public void deposit(BigDecimal amount);
+    public BigDecimal getBalance();
+    public void transfer(BankAccount to, BigDecimal amount);
 }
 ```
 
@@ -105,13 +140,13 @@ public class ATMService {
 
 | Pattern | Application |
 |---------|-------------|
-| State | Primary variation point for atm machine |
-| Command | Secondary structure or creation |
+| State | ATM session: idle, authenticated, transaction |
+| Strategy | Transaction type handlers |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** ATMService orchestrates; entities hold state
+- **O:** New behavior via new TransactionStrategy impl
+- **D:** Depend on TransactionStrategy interface
 
 ---
 
@@ -121,24 +156,38 @@ public class ATMService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: withdraw()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant A as ATMService
+participant Auth as AuthenticationService
+participant D as CashDispenser
+U->>A: insert card + PIN
+A->>Auth: validate(card, pin)
+Auth-->>A: session
+U->>A: withdraw(100)
+A->>D: dispense(100)
+A-->>U: cash + receipt
 ```
 
-**Failure path:** Invalid input → throw `InsufficientFundsException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant A as ATMService
+participant Acct as BankAccount
+U->>A: withdraw(10000)
+A->>Acct: checkBalance()
+Acct-->>A: insufficient
+A-->>U: InsufficientFundsException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `ATMService` core loop."
-
-Extension example: add new `BankService` subclass or enum value + plug new Strategy at runtime.
+> "New `Command` implementation plugs in at runtime — no change to `ATMService`."
+>
+> "Add new `ATM` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -146,58 +195,54 @@ Extension example: add new `BankService` subclass or enum value + plug new Strat
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Command | Command — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (InsufficientFundsException)
+- One session per ATM — synchronized session state
+- Insufficient funds → InsufficientFundsException
+- Wrong PIN 3 times → CardRetainedException
+- Dispenser empty → TemporarilyUnavailableException
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design atm machine starting with clarifying scope — in-memory, single process, core flows only."
+> "ATM is a facade over authentication, account operations, and cash hardware."
 >
-> "Entities I see: `ATM`, `Card`, `Account`, `Transaction`, `CashDispenser`, `BankService`. I'll group them into domain structure and a service facade."
+> "Session state machine: IDLE until card inserted, AUTHENTICATED after PIN, back to IDLE on eject."
 >
-> "The variation point is State — for example different policies or algorithms without changing the orchestration loop."
+> "AuthenticationService validates PIN against Card — not stored on ATM."
 >
-> "Core API: `withdraw(amount)` — validate first, delegate to domain, return typed result."
+> "Withdraw checks balance, daily limit, then asks CashDispenser for note combination."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "Deposit updates balance immediately — no cash validation in MVP."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "Transfer debits source, credits target atomically on same bank."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "Transaction log records every operation for audit."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "HLD: ATM connects to core banking via secure API; LLD models terminal behavior."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How to model cash denomination optimization in dispenser?
+2. Design for ATM network with shared cash management?
+3. How to prevent concurrent sessions on same card?
+4. Rollback if dispense fails after debit?
 
 ---
 
 ## 14. Related Links
 
-- [State pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
 - [Java implementation](../../09-code-implementations/java/classic/atm/) (full)
-

@@ -6,9 +6,20 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-LLD-P08-decorator-coffee.md](../../../Case Studies/lld/design-patterns/CS-LLD-P08-decorator-coffee.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Decorator — Coffee Shop domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## 1. Problem Statement
 
-Add milk, whip, caramel as decorators on base beverage.
+Design decorator adding milk, whip, caramel to base coffee with dynamic price.
 
 ---
 
@@ -16,26 +27,30 @@ Add milk, whip, caramel as decorators on base beverage.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | Which add-ons? | Milk, whip, caramel, extra shot — each adds cost |
+| 2 | Base beverages? | Espresso, HouseBlend, DarkRoast |
+| 3 | Can add-ons stack? | Yes — milk + whip on same base |
+| 4 | Size variants? | Extension — Tall/Grande via decorator or enum |
+| 5 | Discount rules? | Extension — CouponDecorator |
+| 6 | Takeaway vs dine-in? | Out of scope |
+| 7 | Recipe display? | getDescription() returns full stack string |
+| 8 | Pricing source? | Each component reports getCost() |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for decorator — coffee shop
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- Compose beverage from base + zero or more add-on decorators
+- getCost() sums base and all decorator prices
+- getDescription() lists full recipe chain
+- Add decorators at runtime — open for extension
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via Beverage interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,48 +58,62 @@ Add milk, whip, caramel as decorators on base beverage.
 
 | Entity | Role |
 |--------|------|
-| Beverage | Core domain entity / service |
-| Espresso | Core domain entity / service |
-| MilkDecorator | Core domain entity / service |
-| WhipDecorator | Core domain entity / service |
-| Cost | Core domain entity / service |
+| `Beverage` | Component interface |
+| `Espresso` | Concrete |
+| `MilkDecorator` | Add-on |
+| `WhipDecorator` | Add-on |
+| `PriceCalculator` | Sum cost |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `Beverage`, `Espresso`, `MilkDecorator`, `WhipDecorator`, `Cost`  
-**Verbs → methods:** `getCost()` and related operations
+**Nouns → classes:** `Beverage`, `Espresso`, `MilkDecorator`, `WhipDecorator`, `PriceCalculator`  
+**Verbs → methods:** `getCost()`, `getDescription()`, `addMilk()`, `addWhip()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  BeverageService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +getCost()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  CoffeeShop         │──────>│ Decorator        │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteDecorator│
+│  Beverage           │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Beverage     │────>│  Espresso  │
+│  Espresso           │────>│  MilkDecorator   │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +getCost()
+    class CoffeeShop {
+        +BigDecimal getCost()
+        +String getDescription()
+        +Beverage addMilk()
+        +Beverage addWhip()
     }
-    class DomainRoot {
-        +execute()
-    }
-    class Strategy {
+    class Beverage {
         <<interface>>
-        +apply()
+        +apply() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class Espresso {
+        +execute() void
+    }
+    class MilkDecorator {
+        +execute() void
+    }
+    class WhipDecorator {
+        +execute() void
+    }
+    class PriceCalculator {
+        +execute() void
+    }
+    CoffeeShop --> Beverage
 ```
 
 ---
@@ -92,9 +121,11 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class BeverageService {
-    public Result getCost();
-    // Additional: validate, lookup, list as needed for Decorator — Coffee Shop
+public class CoffeeShop {
+    public BigDecimal getCost();
+    public String getDescription();
+    public Beverage addMilk();
+    public Beverage addWhip();
 }
 ```
 
@@ -104,13 +135,13 @@ public class BeverageService {
 
 | Pattern | Application |
 |---------|-------------|
-| Decorator | Primary variation point for decorator — coffee shop |
-
+| Decorator | Wrap Beverage with add-ons dynamically |
+| Component | Beverage interface unifies base and decorated |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** CoffeeDecorator orchestrates; entities hold state
+- **O:** New behavior via new Beverage impl
+- **D:** Depend on Beverage interface
 
 ---
 
@@ -120,24 +151,34 @@ public class BeverageService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: getCost()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant C as Customer
+participant S as CoffeeShop
+participant B as Beverage
+C->>S: order(espresso + milk + whip)
+S->>B: new Espresso()
+S->>B: wrap MilkDecorator
+S->>B: wrap WhipDecorator
+B-->>S: getCost()
+S-->>C: total + description
 ```
 
-**Failure path:** Invalid input → throw `DomainException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant C as Customer
+participant S as CoffeeShop
+C->>S: order(unknownType)
+S-->>C: UnknownBeverageException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `BeverageService` core loop."
-
-Extension example: add new `Cost` subclass or enum value + plug new Strategy at runtime.
+> "New `Decorator` implementation plugs in at runtime — no change to `CoffeeShop`."
+>
+> "Add new `Beverage` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -145,58 +186,54 @@ Extension example: add new `Cost` subclass or enum value + plug new Strategy at 
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Decorator | Decorator — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (domain check)
+- Immutable decorator chain — thread-safe after construction
+- Unknown base type → UnknownBeverageException
+- Null wrap target → NullPointerException — validate in constructor
+- Deep stack — no hard limit in MVP
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design decorator — coffee shop starting with clarifying scope — in-memory, single process, core flows only."
+> "Beverage interface declares getCost() and getDescription()."
 >
-> "Entities I see: `Beverage`, `Espresso`, `MilkDecorator`, `WhipDecorator`, `Cost`. I'll group them into domain structure and a service facade."
+> "Concrete bases: Espresso, HouseBlend implement Beverage directly."
 >
-> "The variation point is Decorator — for example different policies or algorithms without changing the orchestration loop."
+> "Decorator abstract class implements Beverage and holds wrapped Beverage."
 >
-> "Core API: `getCost()` — validate first, delegate to domain, return typed result."
+> "MilkDecorator adds milk cost/description delegating to inner beverage."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "Customer order builds chain: new MilkDecorator(new WhipDecorator(new Espresso()))."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "Open-Closed: new add-on = new Decorator subclass, no change to existing code."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "Contrast with subclass explosion — Latte extends EspressoWithMilk extends..."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "This is canonical Gang-of-Four Decorator interview question."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. Decorator vs subclassing for add-ons?
+2. How to serialize order for receipt?
+3. Add size as decorator or property?
+4. Remove an add-on from middle of chain?
 
 ---
 
 ## 14. Related Links
 
-- [Decorator pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/patterns/decorator-coffee/) (skeleton)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/patterns/decorator-coffee/) (full)

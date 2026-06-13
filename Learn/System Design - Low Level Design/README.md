@@ -8,14 +8,15 @@ A modular, interview-ready study system with **114 company-tagged LLD questions*
 
 ## How to Use This Repo
 
-1. **Week 1:** Read [Interview Framework](00-interview-framework/) + [Diagram Playbook](06-diagram-playbook/) — learn *how* to answer any LLD question.
-2. **Week 2:** Study [Core Concepts](01-core-concepts/) + memorize [Memory Maps](01-core-concepts/memory-map-master.md).
-3. **Weeks 3–4:** Complete [Design Patterns Track](03-design-patterns/) (25 questions).
-4. **Weeks 5–6:** Complete [Classic OOD Track](02-classic-ood/) (64 questions).
-5. **Week 7:** Complete [Concurrency LLD Track](04-concurrency-lld/) (15 questions).
-6. **Week 8:** Complete [Gen AI LLD Track](05-genai-llm-lld/) (10 questions) + mocks.
-7. **Before each interview:** Check [Company Question Index](07-company-question-index.md) for likely questions.
-8. **For code practice:** See [Java Implementations](09-code-implementations/).
+1. **Week 0 (recommended):** Read [Case Studies Library](../Case%20Studies/README.md) — start with [Parking Lot LLD case study](../Case%20Studies/lld/classic-ood/CS-LLD-O01-parking-lot.md) or a [paired end-to-end doc](../Case%20Studies/paired/CS-PAIR-01-enterprise-rag.md).
+2. **Week 1:** Read [Interview Framework](00-interview-framework/) + [Diagram Playbook](06-diagram-playbook/) — learn *how* to answer any LLD question.
+3. **Week 2:** Study [Core Concepts](01-core-concepts/) + memorize [Memory Maps](01-core-concepts/memory-map-master.md).
+4. **Weeks 3–4:** Complete [Design Patterns Track](03-design-patterns/) (25 questions) — case study → question → code.
+5. **Weeks 5–6:** Complete [Classic OOD Track](02-classic-ood/) (64 questions).
+6. **Week 7:** Complete [Concurrency LLD Track](04-concurrency-lld/) (15 questions).
+7. **Week 8:** Complete [Gen AI LLD Track](05-genai-llm-lld/) (10 questions) + mocks.
+8. **Before each interview:** Check [Company Question Index](07-company-question-index.md) for likely questions.
+9. **For code practice:** See [Java Implementations](09-code-implementations/).
 
 ---
 
@@ -23,6 +24,7 @@ A modular, interview-ready study system with **114 company-tagged LLD questions*
 
 | Folder | Contents |
 |--------|----------|
+| [Case Studies](../Case%20Studies/) | **219 end-to-end case studies** (requirements → LLD → scale projection) + 20 paired HLD+LLD narratives |
 | [00-interview-framework/](00-interview-framework/) | 8-step flow, class diagrams, narration, pattern picker, code guidance |
 | [01-core-concepts/](01-core-concepts/) | OOP, SOLID, GoF patterns, UML, concurrency, anti-patterns |
 | [02-classic-ood/](02-classic-ood/) | **60 full question scripts** |
@@ -50,22 +52,24 @@ A modular, interview-ready study system with **114 company-tagged LLD questions*
 
 ## Per-Question Template
 
-Every question file includes:
+Every question file includes **Parking Lot-level detail** (all 14 sections):
 
 1. Company tags + difficulty
-2. Clarifying questions (with expected answers)
+2. **8 problem-specific** clarifying questions (not generic templates)
 3. Functional & non-functional requirements
-4. Core entities & relationships
-5. Class diagram (ASCII + Mermaid)
-6. Public API / key methods
-7. Design patterns & SOLID
-8. Sequence diagrams (2–3 flows)
+4. Core entities & relationships with roles
+5. Class diagram (ASCII + Mermaid with entity-specific methods)
+6. Public API / key Java methods
+7. Design patterns & SOLID (correct pattern names, not interface names)
+8. Sequence diagrams (happy path + failure path)
 9. Extensibility discussion
-10. Tradeoffs table
+10. Tradeoffs table with Pick
 11. Concurrency & edge cases
-12. **Full interview answer script** (spoken walkthrough)
+12. **Full 8–10 paragraph interview answer script**
 13. Follow-up questions
-14. Related links (concepts, HLD counterpart if any)
+14. Related links (concepts, Java impl, HLD counterpart)
+
+**Regenerate questions** (after editing specs): `python _expand_all_questions.py`
 
 ---
 
@@ -97,6 +101,8 @@ Every question file includes:
 
 ## Quick Links
 
+- [Case Studies Index](../Case%20Studies/index.md)
+- [Enterprise RAG Paired Case Study](../Case%20Studies/paired/CS-PAIR-01-enterprise-rag.md)
 - [8-Week Study Plan](08-study-schedule/8-week-plan.md)
 - [LLD Round Flow](00-interview-framework/01-lld-round-flow.md)
 - [How to Draw Class Diagrams](00-interview-framework/02-how-to-draw-class-diagrams.md)

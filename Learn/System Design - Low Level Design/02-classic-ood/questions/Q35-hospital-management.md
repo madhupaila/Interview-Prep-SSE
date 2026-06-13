@@ -1,14 +1,25 @@
 # Hospital Management
 
 **Track:** Classic OOD  
-**Companies:** Epic, Cerner  
+**Companies:** Epic, Cerner, Amazon  
 **Difficulty:** Hard  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-O35-hospital-management.md](../../../Case Studies/lld/classic-ood/CS-LLD-O35-hospital-management.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Hospital Management domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Design hospital patient flow: patients, doctors, appointments, records.
+Design hospital system: patients, doctors, appointments, medical records.
 
 ---
 
@@ -16,26 +27,30 @@ Design hospital patient flow: patients, doctors, appointments, records.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Hospital Management? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design hospital system? | Include in MVP — Design hospital system |
+| 5 | Requirement: patients? | Include in MVP — patients |
+| 6 | Requirement: doctors? | Include in MVP — doctors |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for hospital management
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- HospitalService handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via SchedulingStrategy interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,49 +58,64 @@ Design hospital patient flow: patients, doctors, appointments, records.
 
 | Entity | Role |
 |--------|------|
-| Patient | Core domain entity / service |
-| Doctor | Core domain entity / service |
-| Appointment | Core domain entity / service |
-| MedicalRecord | Core domain entity / service |
-| Department | Core domain entity / service |
-| HospitalService | Core domain entity / service |
+| `Patient` | Medical record owner |
+| `Doctor` | Provider |
+| `Appointment` | Scheduled visit |
+| `Department` | Ward |
+| `MedicalRecord` | History |
+| `BillingAccount` | Charges |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `Patient`, `Doctor`, `Appointment`, `MedicalRecord`, `Department`, `HospitalService`  
-**Verbs → methods:** `scheduleAppointment(patient, doctor)` and related operations
+**Nouns → classes:** `Patient`, `Doctor`, `Appointment`, `Department`, `MedicalRecord`, `BillingAccount`  
+**Verbs → methods:** `book()`, `cancelAppointment()`, `getRecord()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  PatientService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +scheduleAppointment()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  HospitalService    │──────>│ Strategy         │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteStrategy │
+│  Patient            │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Patient     │────>│  Doctor  │
+│  Doctor             │────>│  Appointment     │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +scheduleAppointment(patient, doctor)
+    class HospitalService {
+        +Appointment book(Patient patient, Doctor doctor, TimeSlot slot)
+        +void cancelAppointment(String id)
+        +MedicalRecord getRecord(String patientId)
     }
-    class DomainRoot {
-        +execute()
+    class Patient {
+        +execute() void
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class Doctor {
+        +execute() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class Appointment {
+        +execute() void
+    }
+    class Department {
+        +execute() void
+    }
+    class MedicalRecord {
+        +execute() void
+    }
+    class BillingAccount {
+        +execute() void
+    }
+    HospitalService --> Patient
 ```
 
 ---
@@ -93,9 +123,10 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class PatientService {
-    public Result scheduleAppointment(patient, doctor);
-    // Additional: validate, lookup, list as needed for Hospital Management
+public class HospitalService {
+    public Appointment book(Patient patient, Doctor doctor, TimeSlot slot);
+    public void cancelAppointment(String id);
+    public MedicalRecord getRecord(String patientId);
 }
 ```
 
@@ -105,13 +136,12 @@ public class PatientService {
 
 | Pattern | Application |
 |---------|-------------|
-| Factory | Primary variation point for hospital management |
-| Observer | Secondary structure or creation |
+| Strategy | Variation point in Hospital Management |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** HospitalService orchestrates; entities hold state
+- **O:** New behavior via new SchedulingStrategy impl
+- **D:** Depend on SchedulingStrategy interface
 
 ---
 
@@ -121,24 +151,32 @@ public class PatientService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: scheduleAppointment()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as HospitalService
+participant D as Patient
+U->>S: book()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `SlotUnavailableException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as HospitalService
+U->>S: book(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `PatientService` core loop."
-
-Extension example: add new `HospitalService` subclass or enum value + plug new Strategy at runtime.
+> "New `Strategy` implementation plugs in at runtime — no change to `HospitalService`."
+>
+> "Add new `Patient` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -146,58 +184,58 @@ Extension example: add new `HospitalService` subclass or enum value + plug new S
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Strategy | Strategy — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (SlotUnavailableException)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design hospital management starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Hospital Management — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `Patient`, `Doctor`, `Appointment`, `MedicalRecord`, `Department`, `HospitalService`. I'll group them into domain structure and a service facade."
+> "Entities: `Patient`, `Doctor`, `Appointment`, `Department`, `MedicalRecord`, `BillingAccount`. Domain structure separate from `HospitalService` orchestration."
 >
-> "The variation point is Factory — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design hospital system: patients, doctors, appointments, medical records."
 >
-> "Core API: `scheduleAppointment(patient, doctor)` — validate first, delegate to domain, return typed result."
+> "`Patient` — medical record owner; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`Doctor` — provider; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`Appointment` — scheduled visit; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`HospitalService` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Strategy` in isolation?
+2. How would you extend Hospital Management without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [Factory pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
 - [Java implementation](../../09-code-implementations/java/classic/hospital-management/) (skeleton)
-
