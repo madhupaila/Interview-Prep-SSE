@@ -6,9 +6,20 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-LLD-O31-hotel-key-card.md](../../../Case Studies/lld/classic-ood/CS-LLD-O31-hotel-key-card.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Hotel Key Card System domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## 1. Problem Statement
 
-Design hotel key card access: issue card, room access, expire on checkout.
+Design hotel key card: encode room access, expiry, revoke on checkout.
 
 ---
 
@@ -16,26 +27,27 @@ Design hotel key card access: issue card, room access, expire on checkout.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Hotel Key Card System? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Overbooking? | No — reject overlapping dates |
+| 5 | Cancellation? | Policy-based cancel window |
+| 6 | Room types? | Enum RoomType |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for hotel key card system
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- Checkout and return items with business rules
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via AccessPolicy interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,49 +55,61 @@ Design hotel key card access: issue card, room access, expire on checkout.
 
 | Entity | Role |
 |--------|------|
-| KeyCard | Core domain entity / service |
-| Room | Core domain entity / service |
-| Guest | Core domain entity / service |
-| AccessController | Core domain entity / service |
-| CardEncoder | Core domain entity / service |
-| AccessLog | Core domain entity / service |
+| `KeyCard` | RFID token |
+| `Room` | Access target |
+| `Guest` | Holder |
+| `AccessPolicy` | Time-bound rules |
+| `Encoder` | Write card |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `KeyCard`, `Room`, `Guest`, `AccessController`, `CardEncoder`, `AccessLog`  
-**Verbs → methods:** `issueCard(guest, room)` and related operations
+**Nouns → classes:** `KeyCard`, `Room`, `Guest`, `AccessPolicy`, `Encoder`  
+**Verbs → methods:** `checkout()`, `returnItem()`, `reserve()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  KeyCardService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +issueCard()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  KeyCardService     │──────>│ Strategy         │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteStrategy │
+│  KeyCard            │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  KeyCard     │────>│  Room  │
+│  Room               │────>│  Guest           │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +issueCard(guest, room)
+    class KeyCardService {
+        +Loan checkout(Member member, String id)
+        +void returnItem(String id)
+        +void reserve(String isbn)
     }
-    class DomainRoot {
-        +execute()
+    class KeyCard {
+        +execute() void
     }
-    class Strategy {
+    class Room {
+        +execute() void
+    }
+    class Guest {
+        +execute() void
+    }
+    class AccessPolicy {
         <<interface>>
-        +apply()
+        +apply() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class Encoder {
+        +execute() void
+    }
+    KeyCardService --> KeyCard
 ```
 
 ---
@@ -94,8 +118,9 @@ classDiagram
 
 ```java
 public class KeyCardService {
-    public Result issueCard(guest, room);
-    // Additional: validate, lookup, list as needed for Hotel Key Card System
+    public Loan checkout(Member member, String id);
+    public void returnItem(String id);
+    public void reserve(String isbn);
 }
 ```
 
@@ -105,13 +130,12 @@ public class KeyCardService {
 
 | Pattern | Application |
 |---------|-------------|
-| State | Primary variation point for hotel key card system |
-| Factory | Secondary structure or creation |
+| Strategy | Swappable algorithms |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** KeyCardService orchestrates; entities hold state
+- **O:** New behavior via new AccessPolicy impl
+- **D:** Depend on AccessPolicy interface
 
 ---
 
@@ -121,24 +145,32 @@ public class KeyCardService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: issueCard()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as KeyCardService
+participant D as KeyCard
+U->>S: checkout()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `AccessDeniedException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as KeyCardService
+U->>S: checkout(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `KeyCardService` core loop."
-
-Extension example: add new `AccessLog` subclass or enum value + plug new Strategy at runtime.
+> "New `Strategy` implementation plugs in at runtime — no change to `KeyCardService`."
+>
+> "Add new `KeyCard` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -146,58 +178,58 @@ Extension example: add new `AccessLog` subclass or enum value + plug new Strateg
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Strategy | Strategy — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (AccessDeniedException)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design hotel key card system starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Hotel Key Card System — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `KeyCard`, `Room`, `Guest`, `AccessController`, `CardEncoder`, `AccessLog`. I'll group them into domain structure and a service facade."
+> "Entities: `KeyCard`, `Room`, `Guest`, `AccessPolicy`, `Encoder`. Domain structure separate from `KeyCardService` orchestration."
 >
-> "The variation point is State — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design hotel key card: encode room access, expiry, revoke on checkout."
 >
-> "Core API: `issueCard(guest, room)` — validate first, delegate to domain, return typed result."
+> "`KeyCard` — rfid token; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`Room` — access target; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`Guest` — holder; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`KeyCardService` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Strategy` in isolation?
+2. How would you extend Hotel Key Card System without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [State pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
 - [Java implementation](../../09-code-implementations/java/classic/hotel-key-card/) (skeleton)
-

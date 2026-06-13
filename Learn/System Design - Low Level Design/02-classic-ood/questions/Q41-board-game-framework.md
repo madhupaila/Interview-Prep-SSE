@@ -1,14 +1,25 @@
 # Board Game Framework
 
 **Track:** Classic OOD  
-**Companies:** Hasbro, Google  
-**Difficulty:** Hard  
+**Companies:** EA, Hasbro  
+**Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-O41-board-game-framework.md](../../../Case Studies/lld/classic-ood/CS-LLD-O41-board-game-framework.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Board Game Framework domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Design extensible board game framework: board, players, turns, win conditions.
+Design extensible board game framework: board, players, turns, rules engine.
 
 ---
 
@@ -16,26 +27,27 @@ Design extensible board game framework: board, players, turns, win conditions.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Board Game Framework? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design extensible board game framework? | Include in MVP — Design extensible board game framework |
+| 5 | Requirement: players? | Include in MVP — players |
+| 6 | Requirement: rules engine.? | Include in MVP — rules engine. |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for board game framework
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- Execute game turns with rule validation
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via RuleEngine interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,49 +55,66 @@ Design extensible board game framework: board, players, turns, win conditions.
 
 | Entity | Role |
 |--------|------|
-| Game | Core domain entity / service |
-| Board | Core domain entity / service |
-| Player | Core domain entity / service |
-| TurnManager | Core domain entity / service |
-| RuleEngine | Core domain entity / service |
-| WinCondition | Core domain entity / service |
+| `Game` | Match coordinator |
+| `Board` | Grid/graph |
+| `Player` | Participant |
+| `RuleEngine` | Move validation |
+| `TurnManager` | Next player |
+| `GameAction` | Command |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `Game`, `Board`, `Player`, `TurnManager`, `RuleEngine`, `WinCondition`  
-**Verbs → methods:** `playTurn()` and related operations
+**Nouns → classes:** `Game`, `Board`, `Player`, `RuleEngine`, `TurnManager`, `GameAction`  
+**Verbs → methods:** `playTurn()`, `isGameOver()`, `getCurrentPlayer()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  GameService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +playTurn()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  GameFramework      │──────>│ Command          │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteCommand  │
+│  Game               │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Game     │────>│  Board  │
+│  Board              │────>│  Player          │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +playTurn()
+    class GameFramework {
+        +void playTurn(GameAction action)
+        +boolean isGameOver()
+        +Player getCurrentPlayer()
     }
-    class DomainRoot {
-        +execute()
+    class Game {
+        +execute() void
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class Board {
+        -cells: Cell[][]
+        +getPiece(int,int) Piece
+        +movePiece(Move) void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class Player {
+        +execute() void
+    }
+    class RuleEngine {
+        +execute() void
+    }
+    class TurnManager {
+        +execute() void
+    }
+    class GameAction {
+        +execute() void
+    }
+    GameFramework --> Game
 ```
 
 ---
@@ -93,9 +122,10 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class GameService {
-    public Result playTurn();
-    // Additional: validate, lookup, list as needed for Board Game Framework
+public class GameFramework {
+    public void playTurn(GameAction action);
+    public boolean isGameOver();
+    public Player getCurrentPlayer();
 }
 ```
 
@@ -105,13 +135,12 @@ public class GameService {
 
 | Pattern | Application |
 |---------|-------------|
-| Template Method | Primary variation point for board game framework |
-| Strategy | Secondary structure or creation |
+| Command | Encapsulated operations |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** GameFramework orchestrates; entities hold state
+- **O:** New behavior via new RuleEngine impl
+- **D:** Depend on RuleEngine interface
 
 ---
 
@@ -121,24 +150,32 @@ public class GameService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: playTurn()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as GameFramework
+participant D as Game
+U->>S: playTurn()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `InvalidTurnException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as GameFramework
+U->>S: playTurn(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `GameService` core loop."
-
-Extension example: add new `WinCondition` subclass or enum value + plug new Strategy at runtime.
+> "New `Command` implementation plugs in at runtime — no change to `GameFramework`."
+>
+> "Add new `Game` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -146,58 +183,58 @@ Extension example: add new `WinCondition` subclass or enum value + plug new Stra
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Command | Command — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (InvalidTurnException)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design board game framework starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Board Game Framework — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `Game`, `Board`, `Player`, `TurnManager`, `RuleEngine`, `WinCondition`. I'll group them into domain structure and a service facade."
+> "Entities: `Game`, `Board`, `Player`, `RuleEngine`, `TurnManager`, `GameAction`. Domain structure separate from `GameFramework` orchestration."
 >
-> "The variation point is Template Method — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design extensible board game framework: board, players, turns, rules engine."
 >
-> "Core API: `playTurn()` — validate first, delegate to domain, return typed result."
+> "`Game` — match coordinator; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`Board` — grid/graph; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`Player` — participant; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`GameFramework` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Command` in isolation?
+2. How would you extend Board Game Framework without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [Template Method pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/classic/board-game-framework/) (skeleton)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/classic/board-game-framework/) (full)

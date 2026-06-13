@@ -1,14 +1,26 @@
 # LRU Cache
 
 **Track:** Classic OOD  
-**Companies:** Google, Amazon, Meta  
+**Companies:** Amazon, Google, Meta  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-O13-lru-cache.md](../../../Case Studies/lld/classic-ood/CS-LLD-O13-lru-cache.md)
+> **End-to-end pair:** [Distributed Cache / LRU](../../../Case Studies/paired/CS-PAIR-07-distributed-cache-lru.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Redis and Memcached — in-process cache vs distributed cache. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Design in-memory LRU cache with get/put O(1) and fixed capacity.
+Design in-memory LRU cache with O(1) get/put and capacity eviction.
 
 ---
 
@@ -16,26 +28,30 @@ Design in-memory LRU cache with get/put O(1) and fixed capacity.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | Capacity fixed or dynamic? | Fixed at construction |
+| 2 | Thread-safe? | Single-threaded MVP; concurrent variant separate |
+| 3 | Eviction policy? | Least Recently Used only |
+| 4 | Null keys/values allowed? | No — reject null |
+| 5 | get() behavior on miss? | Return null or Optional.empty |
+| 6 | put() on existing key? | Update value and mark most recent |
+| 7 | Time complexity requirement? | O(1) get and put |
+| 8 | Persistence? | In-memory only |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for lru cache
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- get(key) returns value and marks entry most recently used
+- put(key, value) inserts or updates; evicts LRU when at capacity
+- O(1) operations via HashMap + doubly linked list
+- Evict least recently used entry when size exceeds capacity
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via EvictionPolicy interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,47 +59,55 @@ Design in-memory LRU cache with get/put O(1) and fixed capacity.
 
 | Entity | Role |
 |--------|------|
-| LRUCache | Core domain entity / service |
-| Node | Core domain entity / service |
-| DoublyLinkedList | Core domain entity / service |
-| Map | Core domain entity / service |
+| `LRUCache` | Capacity-bound store |
+| `Node` | Key-value DLL node |
+| `DoublyLinkedList` | Recency order |
+| `HashMap` | Key to node |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `LRUCache`, `Node`, `DoublyLinkedList`, `Map`  
-**Verbs → methods:** `get(key)` and related operations
+**Nouns → classes:** `LRUCache`, `Node`, `DoublyLinkedList`, `HashMap`  
+**Verbs → methods:** `get(key)`, `put(key, value)`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  LRUCacheService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +get()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  LRUCache           │──────>│ Composite        │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteComposite│
+│  LRUCache           │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  LRUCache     │────>│  Node  │
+│  Node               │────>│  DoublyLinkedList│
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +get(key)
+    class LRUCache {
+        +V get(K key)
+        +void put(K key, V value)
+        +int size()
+        +void clear()
     }
-    class DomainRoot {
-        +execute()
+    class Node {
+        -key: K
+        -value: V
+        -prev, next: Node
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class DoublyLinkedList {
+        +execute() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class HashMap {
+        +execute() void
+    }
 ```
 
 ---
@@ -91,9 +115,11 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class LRUCacheService {
-    public Result get(key);
-    // Additional: validate, lookup, list as needed for LRU Cache
+public class LRUCache {
+    public V get(K key);
+    public void put(K key, V value);
+    public int size();
+    public void clear();
 }
 ```
 
@@ -103,13 +129,13 @@ public class LRUCacheService {
 
 | Pattern | Application |
 |---------|-------------|
-| None | Primary variation point for lru cache |
-
+| Composite | HashMap + DLL working together |
+| Template | EvictionPolicy hook optional |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** LRUCache orchestrates; entities hold state
+- **O:** New behavior via new EvictionPolicy impl
+- **D:** Depend on EvictionPolicy interface
 
 ---
 
@@ -119,24 +145,37 @@ public class LRUCacheService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: get()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant C as Client
+participant L as LRUCache
+participant H as HashMap
+C->>L: put(A,1)
+C->>L: put(B,2)
+C->>L: get(A)
+L->>H: lookup(A)
+H-->>L: node
+L->>L: moveToHead(node)
+L-->>C: 1
 ```
 
-**Failure path:** Invalid input → throw `CapacityExceededException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant C as Client
+participant L as LRUCache
+C->>L: put(D,4) at capacity
+L->>L: evict tail (LRU)
+C->>L: get(evictedKey)
+L-->>C: null
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `LRUCacheService` core loop."
-
-Extension example: add new `Map` subclass or enum value + plug new Strategy at runtime.
+> "New `Doubly Linked List + HashMap` implementation plugs in at runtime — no change to `LRUCache`."
+>
+> "Add new `LRUCache` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -144,59 +183,54 @@ Extension example: add new `Map` subclass or enum value + plug new Strategy at r
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Structure | LinkedHashMap | HashMap + DLL | DLL — explicit O(1) control |
+| Eviction | FIFO | LRU | LRU per requirement |
+| Thread safety | None | synchronized | sync for MVP concurrent |
+| Capacity | fixed | dynamic resize | fixed at construction |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (CapacityExceededException)
+- Single-threaded — no locking needed in MVP
+- Capacity 0 → reject put or no-op per design choice
+- get on missing key → return null
+- put same key → update in place, no size change, mark MRU
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design lru cache starting with clarifying scope — in-memory, single process, core flows only."
+> "LRUCache combines HashMap for O(1) lookup with doubly linked list for recency order."
 >
-> "Entities I see: `LRUCache`, `Node`, `DoublyLinkedList`, `Map`. I'll group them into domain structure and a service facade."
+> "Each Node holds key, value, prev, next pointers."
 >
-> "The variation point is None — for example different policies or algorithms without changing the orchestration loop."
+> "get: lookup node in map; if miss return null; else move node to head and return value."
 >
-> "Core API: `get(key)` — validate first, delegate to domain, return typed result."
+> "put: if key exists update value and move to head; else add at head, evict tail if over capacity."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "Dummy head/tail sentinels simplify edge cases — no null checks on insert."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "Eviction removes tail.prev from both list and map."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "This is classic LLD — interviewer may ask concurrent version next."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "HLD: distributed cache uses Redis with TTL; LLD teaches local eviction logic."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. Design thread-safe LRU cache?
+2. How to add TTL expiry alongside LRU?
+3. Implement LFU instead — what changes?
+4. How would Redis implement approximate LRU?
 
 ---
 
 ## 14. Related Links
 
-- [None pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
 - [Java implementation](../../09-code-implementations/java/classic/lru-cache/) (full)
-- HLD counterpart: [../System Design - High Level Design/01-core-concepts/caching.md](../System Design - High Level Design/01-core-concepts/caching.md)
-

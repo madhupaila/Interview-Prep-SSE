@@ -6,9 +6,20 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-LLD-O56-baggage-carousel.md](../../../Case Studies/lld/classic-ood/CS-LLD-O56-baggage-carousel.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Baggage Carousel domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## 1. Problem Statement
 
-Design baggage tracking on carousel: load, identify, claim.
+Design baggage carousel: load bags, notify passenger, claim verification.
 
 ---
 
@@ -16,26 +27,27 @@ Design baggage tracking on carousel: load, identify, claim.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Baggage Carousel? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design baggage carousel? | Include in MVP — Design baggage carousel |
+| 5 | Requirement: load bags? | Include in MVP — load bags |
+| 6 | Requirement: notify passenger? | Include in MVP — notify passenger |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for baggage carousel
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- Deliver notifications via configured channels
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via ClaimValidator interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,49 +55,61 @@ Design baggage tracking on carousel: load, identify, claim.
 
 | Entity | Role |
 |--------|------|
-| Baggage | Core domain entity / service |
-| Carousel | Core domain entity / service |
-| Flight | Core domain entity / service |
-| Passenger | Core domain entity / service |
-| BaggageService | Core domain entity / service |
-| Tag | Core domain entity / service |
+| `Carousel` | Belt system |
+| `Bag` | Tagged luggage |
+| `Flight` | Arrival |
+| `Passenger` | Owner |
+| `BagTag` | Barcode id |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `Baggage`, `Carousel`, `Flight`, `Passenger`, `BaggageService`, `Tag`  
-**Verbs → methods:** `claimBaggage(tag)` and related operations
+**Nouns → classes:** `Carousel`, `Bag`, `Flight`, `Passenger`, `BagTag`  
+**Verbs → methods:** `create()`, `getById()`, `listAll()`, `delete()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  BaggageService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +claimBaggage()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  BaggageService     │──────>│ Strategy         │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteStrategy │
+│  Carousel           │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Baggage     │────>│  Carousel  │
+│  Bag                │────>│  Flight          │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +claimBaggage(tag)
+    class BaggageService {
+        +void create(Carousel entity)
+        +Optional<Carousel> getById(String id)
+        +List<Carousel> listAll()
+        +void delete(String id)
     }
-    class DomainRoot {
-        +execute()
+    class Carousel {
+        +execute() void
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class Bag {
+        +execute() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class Flight {
+        +execute() void
+    }
+    class Passenger {
+        +execute() void
+    }
+    class BagTag {
+        +execute() void
+    }
+    BaggageService --> Carousel
 ```
 
 ---
@@ -94,8 +118,10 @@ classDiagram
 
 ```java
 public class BaggageService {
-    public Result claimBaggage(tag);
-    // Additional: validate, lookup, list as needed for Baggage Carousel
+    public void create(Carousel entity);
+    public Optional<Carousel> getById(String id);
+    public List<Carousel> listAll();
+    public void delete(String id);
 }
 ```
 
@@ -105,13 +131,12 @@ public class BaggageService {
 
 | Pattern | Application |
 |---------|-------------|
-| State | Primary variation point for baggage carousel |
-
+| Strategy | Variation point in Baggage Carousel |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** BaggageService orchestrates; entities hold state
+- **O:** New behavior via new ClaimValidator impl
+- **D:** Depend on ClaimValidator interface
 
 ---
 
@@ -121,24 +146,32 @@ public class BaggageService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: claimBaggage()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as BaggageService
+participant D as Carousel
+U->>S: create()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `BaggageNotFoundException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as BaggageService
+U->>S: create(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `BaggageService` core loop."
-
-Extension example: add new `Tag` subclass or enum value + plug new Strategy at runtime.
+> "New `Strategy` implementation plugs in at runtime — no change to `BaggageService`."
+>
+> "Add new `Carousel` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -146,58 +179,58 @@ Extension example: add new `Tag` subclass or enum value + plug new Strategy at r
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Strategy | Strategy — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (BaggageNotFoundException)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design baggage carousel starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Baggage Carousel — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `Baggage`, `Carousel`, `Flight`, `Passenger`, `BaggageService`, `Tag`. I'll group them into domain structure and a service facade."
+> "Entities: `Carousel`, `Bag`, `Flight`, `Passenger`, `BagTag`. Domain structure separate from `BaggageService` orchestration."
 >
-> "The variation point is State — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design baggage carousel: load bags, notify passenger, claim verification."
 >
-> "Core API: `claimBaggage(tag)` — validate first, delegate to domain, return typed result."
+> "`Carousel` — belt system; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`Bag` — tagged luggage; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`Flight` — arrival; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`BaggageService` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Strategy` in isolation?
+2. How would you extend Baggage Carousel without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [State pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
 - [Java implementation](../../09-code-implementations/java/classic/baggage-carousel/) (skeleton)
-

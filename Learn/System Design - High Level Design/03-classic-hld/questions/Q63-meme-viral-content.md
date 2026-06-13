@@ -6,6 +6,17 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-C63-meme-viral-content.md](../../../Case Studies/hld/classic/CS-HLD-C63-meme-viral-content.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Real-world context modeled after Imgur viral ranking and CDN. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a scalable system for: **Meme Generator / Viral Content**.

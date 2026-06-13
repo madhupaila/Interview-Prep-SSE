@@ -6,6 +6,17 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-C21-metrics-monitoring.md](../../../Case Studies/hld/classic/CS-HLD-C21-metrics-monitoring.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Real-world context modeled after Datadog and Prometheus/Grafana. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a scalable system for: **Metrics / Monitoring System**.

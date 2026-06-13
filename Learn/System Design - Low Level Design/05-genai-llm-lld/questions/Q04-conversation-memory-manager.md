@@ -1,14 +1,26 @@
 # Conversation Memory Manager
 
 **Track:** Gen AI LLD  
-**Companies:** OpenAI, Character.AI  
+**Companies:** Character.AI, OpenAI  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-A04-conversation-memory-manager.md](../../../Case Studies/lld/genai/CS-LLD-A04-conversation-memory-manager.md)
+> **End-to-end pair:** [ChatGPT-like Conversational AI](../../../Case Studies/paired/CS-PAIR-03-chatgpt-conversational-ai.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after ChatGPT conversation history and summarization. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Manage conversation history with token budget trimming and summarization.
+Design sliding-window + summary memory for multi-turn chat context.
 
 ---
 
@@ -16,26 +28,31 @@ Manage conversation history with token budget trimming and summarization.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Conversation Memory Manager? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Vector DB? | HLD — stub interface in LLD |
+| 5 | Streaming? | Extension |
+| 6 | Token limits? | Budget manager or truncate |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for conversation memory manager
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- MemoryManager handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via MemoryBuffer interface at variation points
+- Constructor injection for testability
+- Swappable pipeline stages behind interfaces
+- Explicit boundary to HLD for vector DB, model serving, queues
 
 ---
 
@@ -43,48 +60,63 @@ Manage conversation history with token budget trimming and summarization.
 
 | Entity | Role |
 |--------|------|
-| ConversationMemory | Core domain entity / service |
-| Message | Core domain entity / service |
-| MemoryPolicy | Core domain entity / service |
-| Summarizer | Core domain entity / service |
-| TokenCounter | Core domain entity / service |
+| `Conversation` | Session |
+| `Message` | Turn |
+| `MemoryBuffer` | Window |
+| `SummaryCompressor` | Long context |
+| `TokenCounter` | Budget |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `ConversationMemory`, `Message`, `MemoryPolicy`, `Summarizer`, `TokenCounter`  
-**Verbs → methods:** `addMessage(msg)` and related operations
+**Nouns → classes:** `Conversation`, `Message`, `MemoryBuffer`, `SummaryCompressor`, `TokenCounter`  
+**Verbs → methods:** `sendMessage()`, `getOrCreate()`, `markRead()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  ConversationMemoryService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +addMessage()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  MemoryManager      │──────>│ Strategy         │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteStrategy │
+│  Conversation       │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  ConversationMemory     │────>│  Message  │
+│  Message            │────>│  MemoryBuffer    │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +addMessage(msg)
+    class MemoryManager {
+        +Message sendMessage(String conversationId, String text)
+        +Conversation getOrCreate(User a, User b)
+        +void markRead(String messageId)
     }
-    class DomainRoot {
-        +execute()
+    class Conversation {
+        -participants: Pair<User>
+        -messages: List
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class Message {
+        -text: String
+        -status: DeliveryStatus
+        +markRead() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class MemoryBuffer {
+        +execute() void
+    }
+    class SummaryCompressor {
+        +execute() void
+    }
+    class TokenCounter {
+        +execute() void
+    }
+    MemoryManager --> Conversation
 ```
 
 ---
@@ -92,9 +124,10 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class ConversationMemoryService {
-    public Result addMessage(msg);
-    // Additional: validate, lookup, list as needed for Conversation Memory Manager
+public class MemoryManager {
+    public Message sendMessage(String conversationId, String text);
+    public Conversation getOrCreate(User a, User b);
+    public void markRead(String messageId);
 }
 ```
 
@@ -104,13 +137,13 @@ public class ConversationMemoryService {
 
 | Pattern | Application |
 |---------|-------------|
-| Strategy | Primary variation point for conversation memory manager |
-
+| Strategy | Swappable pipeline components |
+| Chain of Responsibility | Sequential processing stages |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** MemoryManager orchestrates; entities hold state
+- **O:** New behavior via new MemoryBuffer impl
+- **D:** Depend on MemoryBuffer interface
 
 ---
 
@@ -120,24 +153,32 @@ public class ConversationMemoryService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: addMessage()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as MemoryManager
+participant D as Conversation
+U->>S: sendMessage()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `GenAIException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as MemoryManager
+U->>S: sendMessage(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `ConversationMemoryService` core loop."
-
-Extension example: add new `TokenCounter` subclass or enum value + plug new Strategy at runtime.
+> "New `Strategy` implementation plugs in at runtime — no change to `MemoryManager`."
+>
+> "Add new `Conversation` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -145,59 +186,59 @@ Extension example: add new `TokenCounter` subclass or enum value + plug new Stra
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Strategy | Strategy — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (GenAIException)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design conversation memory manager starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Conversation Memory Manager — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `ConversationMemory`, `Message`, `MemoryPolicy`, `Summarizer`, `TokenCounter`. I'll group them into domain structure and a service facade."
+> "Entities: `Conversation`, `Message`, `MemoryBuffer`, `SummaryCompressor`, `TokenCounter`. Domain structure separate from `MemoryManager` orchestration."
 >
-> "The variation point is Strategy — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design sliding-window + summary memory for multi-turn chat context."
 >
-> "Core API: `addMessage(msg)` — validate first, delegate to domain, return typed result."
+> "`Conversation` — session; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`Message` — turn; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`MemoryBuffer` — window; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`MemoryManager` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Strategy` in isolation?
+2. How would you extend Conversation Memory Manager without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
+- [Gen AI LLD memory map](../../05-genai-llm-lld/memory-map-genai-lld.md)
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/genai/conversation-memory-manager/) (skeleton)
-- HLD counterpart: [../System Design - High Level Design/02-genai-llm-hld/questions/Q01-design-chatgpt-clone.md](../System Design - High Level Design/02-genai-llm-hld/questions/Q01-design-chatgpt-clone.md)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/genai/conversation-memory-manager/) (full)

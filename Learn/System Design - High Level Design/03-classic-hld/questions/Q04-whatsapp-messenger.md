@@ -6,6 +6,18 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-C04-whatsapp-messenger.md](../../../Case Studies/hld/classic/CS-HLD-C04-whatsapp-messenger.md)
+> **End-to-end pair:** [WhatsApp / 1:1 Messenger](../../../Case Studies/paired/CS-PAIR-05-whatsapp-messenger.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Real-world context modeled after WhatsApp and iMessage — 1:1 messaging at billions scale. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a scalable system for: **WhatsApp / Messenger**.

@@ -6,6 +6,17 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-G35-offline-airgapped-rag.md](../../../Case Studies/hld/genai/CS-HLD-G35-offline-airgapped-rag.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Real-world context modeled after Leading products in the Design Offline RAG for Air-Gapped Enterprise domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a production system for: **Offline RAG for Air-Gapped Enterprise**.

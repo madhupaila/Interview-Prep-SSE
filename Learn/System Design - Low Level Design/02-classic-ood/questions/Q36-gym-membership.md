@@ -1,14 +1,25 @@
 # Gym Membership
 
 **Track:** Classic OOD  
-**Companies:** Planet Fitness, Amazon  
+**Companies:** Amazon, Planet Fitness  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-O36-gym-membership.md](../../../Case Studies/lld/classic-ood/CS-LLD-O36-gym-membership.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Gym Membership domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Design gym membership: plans, check-in, class booking, billing.
+Design gym: memberships, check-in, class booking, billing.
 
 ---
 
@@ -16,26 +27,30 @@ Design gym membership: plans, check-in, class booking, billing.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Gym Membership? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design gym? | Include in MVP — Design gym |
+| 5 | Requirement: memberships? | Include in MVP — memberships |
+| 6 | Requirement: check-in? | Include in MVP — check-in |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for gym membership
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- GymService handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via MembershipPlan interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,49 +58,61 @@ Design gym membership: plans, check-in, class booking, billing.
 
 | Entity | Role |
 |--------|------|
-| Member | Core domain entity / service |
-| MembershipPlan | Core domain entity / service |
-| CheckIn | Core domain entity / service |
-| FitnessClass | Core domain entity / service |
-| Booking | Core domain entity / service |
-| GymService | Core domain entity / service |
+| `Member` | Subscription holder |
+| `MembershipPlan` | Tier |
+| `CheckIn` | Facility access |
+| `FitnessClass` | Scheduled session |
+| `Payment` | Monthly fee |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `Member`, `MembershipPlan`, `CheckIn`, `FitnessClass`, `Booking`, `GymService`  
-**Verbs → methods:** `checkIn(member)` and related operations
+**Nouns → classes:** `Member`, `MembershipPlan`, `CheckIn`, `FitnessClass`, `Payment`  
+**Verbs → methods:** `checkIn()`, `bookClass()`, `renewMembership()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  MemberService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +checkIn()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  GymService         │──────>│ Strategy         │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteStrategy │
+│  Member             │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Member     │────>│  MembershipPlan  │
+│  MembershipPlan     │────>│  CheckIn         │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +checkIn(member)
+    class GymService {
+        +void checkIn(String memberId)
+        +void bookClass(String memberId, String classId)
+        +void renewMembership(String memberId)
     }
-    class DomainRoot {
-        +execute()
+    class Member {
+        -id: String
+        +getActiveLoans() List
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class MembershipPlan {
+        +execute() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class CheckIn {
+        +execute() void
+    }
+    class FitnessClass {
+        +execute() void
+    }
+    class Payment {
+        +execute() void
+    }
+    GymService --> Member
 ```
 
 ---
@@ -93,9 +120,10 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class MemberService {
-    public Result checkIn(member);
-    // Additional: validate, lookup, list as needed for Gym Membership
+public class GymService {
+    public void checkIn(String memberId);
+    public void bookClass(String memberId, String classId);
+    public void renewMembership(String memberId);
 }
 ```
 
@@ -105,13 +133,12 @@ public class MemberService {
 
 | Pattern | Application |
 |---------|-------------|
-| Strategy | Primary variation point for gym membership |
-| State | Secondary structure or creation |
+| Strategy | Variation point in Gym Membership |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** GymService orchestrates; entities hold state
+- **O:** New behavior via new MembershipPlan impl
+- **D:** Depend on MembershipPlan interface
 
 ---
 
@@ -121,24 +148,32 @@ public class MemberService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: checkIn()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as GymService
+participant D as Member
+U->>S: checkIn()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `MembershipExpiredException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as GymService
+U->>S: checkIn(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `MemberService` core loop."
-
-Extension example: add new `GymService` subclass or enum value + plug new Strategy at runtime.
+> "New `Strategy` implementation plugs in at runtime — no change to `GymService`."
+>
+> "Add new `Member` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -146,51 +181,52 @@ Extension example: add new `GymService` subclass or enum value + plug new Strate
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Strategy | Strategy — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (MembershipExpiredException)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design gym membership starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Gym Membership — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `Member`, `MembershipPlan`, `CheckIn`, `FitnessClass`, `Booking`, `GymService`. I'll group them into domain structure and a service facade."
+> "Entities: `Member`, `MembershipPlan`, `CheckIn`, `FitnessClass`, `Payment`. Domain structure separate from `GymService` orchestration."
 >
-> "The variation point is Strategy — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design gym: memberships, check-in, class booking, billing."
 >
-> "Core API: `checkIn(member)` — validate first, delegate to domain, return typed result."
+> "`Member` — subscription holder; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`MembershipPlan` — tier; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`CheckIn` — facility access; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`GymService` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Strategy` in isolation?
+2. How would you extend Gym Membership without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
@@ -198,6 +234,5 @@ Extension example: add new `GymService` subclass or enum value + plug new Strate
 
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
 - [Java implementation](../../09-code-implementations/java/classic/gym-membership/) (skeleton)
-

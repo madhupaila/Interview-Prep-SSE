@@ -1,14 +1,25 @@
 # Playlist Manager
 
 **Track:** Classic OOD  
-**Companies:** Spotify, Apple Music  
+**Companies:** Apple Music, Spotify  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-O42-playlist-manager.md](../../../Case Studies/lld/classic-ood/CS-LLD-O42-playlist-manager.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Playlist Manager domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Design playlist manager: songs, playlists, shuffle, repeat modes.
+Design playlist CRUD, shuffle, repeat, collaborative editing.
 
 ---
 
@@ -16,26 +27,27 @@ Design playlist manager: songs, playlists, shuffle, repeat modes.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Playlist Manager? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design playlist CRUD? | Include in MVP — Design playlist CRUD |
+| 5 | Requirement: shuffle? | Include in MVP — shuffle |
+| 6 | Requirement: repeat? | Include in MVP — repeat |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for playlist manager
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- Execute game turns with rule validation
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via ShuffleStrategy interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,49 +55,63 @@ Design playlist manager: songs, playlists, shuffle, repeat modes.
 
 | Entity | Role |
 |--------|------|
-| Song | Core domain entity / service |
-| Playlist | Core domain entity / service |
-| PlaybackQueue | Core domain entity / service |
-| ShuffleStrategy | Core domain entity / service |
-| Player | Core domain entity / service |
-| MusicLibrary | Core domain entity / service |
+| `Playlist` | Ordered tracks |
+| `Song` | Track metadata |
+| `User` | Owner |
+| `PlaybackQueue` | Current order |
+| `ShuffleStrategy` | Random order |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `Song`, `Playlist`, `PlaybackQueue`, `ShuffleStrategy`, `Player`, `MusicLibrary`  
-**Verbs → methods:** `play(playlist)` and related operations
+**Nouns → classes:** `Playlist`, `Song`, `User`, `PlaybackQueue`, `ShuffleStrategy`  
+**Verbs → methods:** `addSong()`, `shuffle()`, `playNext()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  SongService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +play()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  PlaylistService    │──────>│ Strategy         │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteStrategy │
+│  Playlist           │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Song     │────>│  Playlist  │
+│  Song               │────>│  User            │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +play(playlist)
+    class PlaylistService {
+        +void addSong(String playlistId, String songId)
+        +void shuffle(String playlistId)
+        +List<Song> playNext()
     }
-    class DomainRoot {
-        +execute()
+    class Playlist {
+        +addSong(Song) void
+        +shuffle() void
     }
-    class Strategy {
+    class Song {
+        +execute() void
+    }
+    class User {
+        -id: String
+        -name: String
+    }
+    class PlaybackQueue {
+        +execute() void
+    }
+    class ShuffleStrategy {
         <<interface>>
-        +apply()
+        +apply() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    PlaylistService --> Playlist
 ```
 
 ---
@@ -93,9 +119,10 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class SongService {
-    public Result play(playlist);
-    // Additional: validate, lookup, list as needed for Playlist Manager
+public class PlaylistService {
+    public void addSong(String playlistId, String songId);
+    public void shuffle(String playlistId);
+    public List<Song> playNext();
 }
 ```
 
@@ -105,13 +132,13 @@ public class SongService {
 
 | Pattern | Application |
 |---------|-------------|
-| Strategy | Primary variation point for playlist manager |
-| Iterator | Secondary structure or creation |
+| Strategy | Swappable algorithms |
+| Queue | FIFO ordering of work items |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** PlaylistService orchestrates; entities hold state
+- **O:** New behavior via new ShuffleStrategy impl
+- **D:** Depend on ShuffleStrategy interface
 
 ---
 
@@ -121,24 +148,32 @@ public class SongService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: play()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as PlaylistService
+participant D as Playlist
+U->>S: addSong()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `EmptyPlaylistException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as PlaylistService
+U->>S: addSong(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `SongService` core loop."
-
-Extension example: add new `MusicLibrary` subclass or enum value + plug new Strategy at runtime.
+> "New `Strategy` implementation plugs in at runtime — no change to `PlaylistService`."
+>
+> "Add new `Playlist` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -146,51 +181,52 @@ Extension example: add new `MusicLibrary` subclass or enum value + plug new Stra
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Strategy | Strategy — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (EmptyPlaylistException)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design playlist manager starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Playlist Manager — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `Song`, `Playlist`, `PlaybackQueue`, `ShuffleStrategy`, `Player`, `MusicLibrary`. I'll group them into domain structure and a service facade."
+> "Entities: `Playlist`, `Song`, `User`, `PlaybackQueue`, `ShuffleStrategy`. Domain structure separate from `PlaylistService` orchestration."
 >
-> "The variation point is Strategy — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design playlist CRUD, shuffle, repeat, collaborative editing."
 >
-> "Core API: `play(playlist)` — validate first, delegate to domain, return typed result."
+> "`Playlist` — ordered tracks; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`Song` — track metadata; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`User` — owner; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`PlaylistService` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Strategy` in isolation?
+2. How would you extend Playlist Manager without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
@@ -198,7 +234,5 @@ Extension example: add new `MusicLibrary` subclass or enum value + plug new Stra
 
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/classic/playlist-manager/) (skeleton)
-- HLD counterpart: [../System Design - High Level Design/03-classic-hld/questions/Q39-spotify-streaming.md](../System Design - High Level Design/03-classic-hld/questions/Q39-spotify-streaming.md)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/classic/playlist-manager/) (full)

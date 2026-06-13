@@ -1,14 +1,25 @@
-# Flyweight — Tree Forest
+# Flyweight — Forest Scene
 
 **Track:** Design Patterns  
-**Companies:** Game engines  
+**Companies:** Unity, EA  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-P21-flyweight-forest.md](../../../Case Studies/lld/design-patterns/CS-LLD-P21-flyweight-forest.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Flyweight — Forest Scene domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Share intrinsic tree mesh data across many tree instances.
+Design flyweight sharing tree intrinsic state (type) across thousands of instances.
 
 ---
 
@@ -16,26 +27,30 @@ Share intrinsic tree mesh data across many tree instances.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Flyweight — Forest Scene? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design flyweight sharing tree intrinsic ? | Include in MVP — Design flyweight sharing tree intrinsic state (typ |
+| 5 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 6 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for flyweight — tree forest
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- TreeFlyweight handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via TreeType interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,48 +58,57 @@ Share intrinsic tree mesh data across many tree instances.
 
 | Entity | Role |
 |--------|------|
-| Tree | Core domain entity / service |
-| TreeType | Core domain entity / service |
-| TreeFactory | Core domain entity / service |
-| Forest | Core domain entity / service |
-| Position | Core domain entity / service |
+| `TreeType` | Flyweight |
+| `Tree` | Extrinsic position |
+| `Forest` | Object pool |
+| `TreeFactory` | Cache flyweights |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `Tree`, `TreeType`, `TreeFactory`, `Forest`, `Position`  
-**Verbs → methods:** `render()` and related operations
+**Nouns → classes:** `TreeType`, `Tree`, `Forest`, `TreeFactory`  
+**Verbs → methods:** `create()`, `getById()`, `listAll()`, `delete()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  TreeService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +render()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  TreeFlyweight      │──────>│ Flyweight        │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteFlyweight│
+│  TreeType           │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Tree     │────>│  TreeType  │
+│  Tree               │────>│  Forest          │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +render()
+    class TreeFlyweight {
+        +void create(TreeType entity)
+        +Optional<TreeType> getById(String id)
+        +List<TreeType> listAll()
+        +void delete(String id)
     }
-    class DomainRoot {
-        +execute()
+    class TreeType {
+        +execute() void
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class Tree {
+        +execute() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class Forest {
+        +execute() void
+    }
+    class TreeFactory {
+        +execute() void
+    }
+    TreeFlyweight --> TreeType
 ```
 
 ---
@@ -92,9 +116,11 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class TreeService {
-    public Result render();
-    // Additional: validate, lookup, list as needed for Flyweight — Tree Forest
+public class TreeFlyweight {
+    public void create(TreeType entity);
+    public Optional<TreeType> getById(String id);
+    public List<TreeType> listAll();
+    public void delete(String id);
 }
 ```
 
@@ -104,13 +130,12 @@ public class TreeService {
 
 | Pattern | Application |
 |---------|-------------|
-| Flyweight | Primary variation point for flyweight — tree forest |
-
+| Flyweight | Shared tree mesh per type |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** TreeFlyweight orchestrates; entities hold state
+- **O:** New behavior via new TreeType impl
+- **D:** Depend on TreeType interface
 
 ---
 
@@ -120,24 +145,32 @@ public class TreeService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: render()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as TreeFlyweight
+participant D as TreeType
+U->>S: create()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `DomainException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as TreeFlyweight
+U->>S: create(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `TreeService` core loop."
-
-Extension example: add new `Position` subclass or enum value + plug new Strategy at runtime.
+> "New `Flyweight` implementation plugs in at runtime — no change to `TreeFlyweight`."
+>
+> "Add new `TreeType` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -145,58 +178,58 @@ Extension example: add new `Position` subclass or enum value + plug new Strategy
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Flyweight | Flyweight — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (domain check)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design flyweight — tree forest starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Flyweight — Forest Scene — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `Tree`, `TreeType`, `TreeFactory`, `Forest`, `Position`. I'll group them into domain structure and a service facade."
+> "Entities: `TreeType`, `Tree`, `Forest`, `TreeFactory`. Domain structure separate from `TreeFlyweight` orchestration."
 >
-> "The variation point is Flyweight — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design flyweight sharing tree intrinsic state (type) across thousands of instances."
 >
-> "Core API: `render()` — validate first, delegate to domain, return typed result."
+> "`TreeType` — flyweight; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`Tree` — extrinsic position; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`Forest` — object pool; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`TreeFlyweight` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Flyweight` in isolation?
+2. How would you extend Flyweight — Forest Scene without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [Flyweight pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/patterns/flyweight-forest/) (skeleton)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/patterns/flyweight-forest/) (full)

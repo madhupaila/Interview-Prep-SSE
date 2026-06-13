@@ -16,7 +16,7 @@
 | Thu | Pattern picker | [04-pattern-picker.md](../00-interview-framework/04-pattern-picker.md) |
 | Fri | Senior signals + code in interview | [05](../00-interview-framework/05-senior-swe-signals.md), [06](../00-interview-framework/06-how-to-write-code-in-interview.md) |
 | Sat | Diagram playbook + OOP/SOLID | [06-diagram-playbook/](../06-diagram-playbook/), [oop-pillars.md](../01-core-concepts/oop-pillars.md) |
-| Sun | **Mock:** Draw Parking Lot skeleton in 15 min | Practice only |
+| Sun | **Mock:** Draw Parking Lot skeleton in 15 min | [CS-LLD-O01 case study](../../Case%20Studies/lld/classic-ood/CS-LLD-O01-parking-lot.md) then practice |
 
 **Deliverable:** Can draw any LLD skeleton in under 10 minutes.
 
@@ -32,7 +32,7 @@
 | Thu | Concurrency fundamentals | [concurrency-fundamentals.md](../01-core-concepts/concurrency-fundamentals.md) |
 | Fri | Anti-patterns + LLD vs HLD | [common-anti-patterns.md](../01-core-concepts/common-anti-patterns.md), [lld-vs-hld-boundary.md](../01-core-concepts/lld-vs-hld-boundary.md) |
 | Sat | Memorize memory maps | [memory-map-master.md](../01-core-concepts/memory-map-master.md) |
-| Sun | **Mock:** Elevator LLD (45 min timed) | Classic OOD Q02 |
+| Sun | **Mock:** Elevator LLD (45 min timed) | Classic OOD Q02 — read [CS-LLD-O02](../../Case%20Studies/lld/classic-ood/CS-LLD-O02-elevator.md) first |
 
 **Deliverable:** Can explain SOLID and top 8 patterns from memory.
 
@@ -99,7 +99,7 @@
 
 | Day | Focus |
 |-----|-------|
-| Mon–Tue | Gen AI Q01–Q10 + [memory-map-genai-lld.md](../05-genai-llm-lld/memory-map-genai-lld.md) |
+| Mon–Tue | Gen AI Q01–Q10 — read [paired RAG](../../Case%20Studies/paired/CS-PAIR-01-enterprise-rag.md) + [GenAI LLD case studies](../../Case%20Studies/lld/genai/) first | [memory-map-genai-lld.md](../05-genai-llm-lld/memory-map-genai-lld.md) |
 | Wed | Company-specific review — [07-company-question-index.md](../07-company-question-index.md) |
 | Thu | **Mock:** Full LLD round (company-specific) |
 | Fri | Re-do 3 weakest questions across tracks |
@@ -122,4 +122,5 @@
 ## Related
 
 - [Company Question Index](../07-company-question-index.md)
+- [Case Studies Index](../../Case%20Studies/index.md)
 - [HLD 8-Week Plan](../System%20Design%20-%20High%20Level%20Design/06-study-schedule/8-week-plan.md)

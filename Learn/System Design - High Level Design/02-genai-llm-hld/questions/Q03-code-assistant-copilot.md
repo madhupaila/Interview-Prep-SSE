@@ -6,6 +6,18 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-G03-code-assistant-copilot.md](../../../Case Studies/hld/genai/CS-HLD-G03-code-assistant-copilot.md)
+> **End-to-end pair:** [Code Assistant (Copilot-like)](../../../Case Studies/paired/CS-PAIR-11-code-assistant-copilot.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Real-world context modeled after GitHub Copilot and Cursor — inline code completion and chat. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a production system for: **Code Assistant (Copilot-like)**.

@@ -6,6 +6,17 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-C56-realtime-analytics-dashboard.md](../../../Case Studies/hld/classic/CS-HLD-C56-realtime-analytics-dashboard.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Real-world context modeled after Grafana live metrics and Flink windows. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a scalable system for: **Real-Time Analytics Dashboard**.

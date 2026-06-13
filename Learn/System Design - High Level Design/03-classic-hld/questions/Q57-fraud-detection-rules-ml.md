@@ -6,6 +6,17 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-C57-fraud-detection-rules-ml.md](../../../Case Studies/hld/classic/CS-HLD-C57-fraud-detection-rules-ml.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Real-world context modeled after Stripe Radar rules + ML scoring. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a scalable system for: **Fraud Detection (Rules+ML)**.

@@ -6,9 +6,20 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-LLD-X01-thread-safe-singleton.md](../../../Case Studies/lld/concurrency/CS-LLD-X01-thread-safe-singleton.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Thread-Safe Singleton domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## 1. Problem Statement
 
-Implement thread-safe singleton with double-checked locking or enum.
+Implement thread-safe singleton with double-checked locking or enum idiom.
 
 ---
 
@@ -16,26 +27,31 @@ Implement thread-safe singleton with double-checked locking or enum.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | Lazy or eager init? | Lazy — created on first getInstance() |
+| 2 | Which approach? | Double-checked locking or enum singleton |
+| 3 | Reflection attack? | Enum singleton prevents; DCL needs guard |
+| 4 | Serialization? | readResolve for DCL; enum handles automatically |
+| 5 | Subclassing? | No — private constructor |
+| 6 | Testability? | Package-private ctor for tests or reset hook |
+| 7 | Multiple class loaders? | Edge case — one instance per loader |
+| 8 | Java version? | volatile + DCL safe since Java 5 |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for thread-safe singleton
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- getInstance() returns same instance across all threads
+- Lazy initialization on first access
+- Thread-safe without global synchronized bottleneck after init
+- Prevent duplicate instance via private constructor
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Thread safety:** Use enum singleton or synchronized
+- Open-Closed via Singleton interface at variation points
+- Constructor injection for testability
+- Correctness under concurrent access — no data races
+- Avoid deadlock — consistent lock ordering where multiple locks
 
 ---
 
@@ -43,45 +59,51 @@ Implement thread-safe singleton with double-checked locking or enum.
 
 | Entity | Role |
 |--------|------|
-| Singleton | Core domain entity / service |
-| ConfigManager | Core domain entity / service |
+| `Singleton` | Single instance |
+| `InstanceHolder` | DCL holder |
+| `ConfigManager` | Use case |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `Singleton`, `ConfigManager`  
-**Verbs → methods:** `getInstance()` and related operations
+**Nouns → classes:** `Singleton`, `InstanceHolder`, `ConfigManager`  
+**Verbs → methods:** `getInstance()`, `configure(key, value)`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  SingletonService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +getInstance()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  SingletonHolder    │──────>│ Singleton        │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteSingleton│
+│  Singleton          │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Singleton     │────>│  ConfigManager  │
+│  InstanceHolder     │────>│  ConfigManager   │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +getInstance()
+    class SingletonHolder {
+        +static Singleton getInstance()
+        +void configure(String key, String value)
     }
-    class DomainRoot {
-        +execute()
+    class Singleton {
+        +execute() void
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class InstanceHolder {
+        +execute() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class ConfigManager {
+        +execute() void
+    }
+    SingletonHolder --> Singleton
 ```
 
 ---
@@ -89,9 +111,9 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class SingletonService {
-    public Result getInstance();
-    // Additional: validate, lookup, list as needed for Thread-Safe Singleton
+public class SingletonHolder {
+    public static Singleton getInstance();
+    public void configure(String key, String value);
 }
 ```
 
@@ -101,13 +123,13 @@ public class SingletonService {
 
 | Pattern | Application |
 |---------|-------------|
-| Singleton | Primary variation point for thread-safe singleton |
-
+| Singleton | Single instance guarantee |
+| Holder | Initialization-on-demand holder idiom |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** SingletonHolder orchestrates; entities hold state
+- **O:** New behavior via new Singleton impl
+- **D:** Depend on Singleton interface
 
 ---
 
@@ -117,24 +139,32 @@ public class SingletonService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: getInstance()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant T1 as Thread1
+participant T2 as Thread2
+participant S as Singleton
+T1->>S: getInstance()
+T2->>S: getInstance()
+S-->>T1: instance
+S-->>T2: same instance
 ```
 
-**Failure path:** Invalid input → throw `ConcurrencyException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant T as Thread
+participant S as Singleton
+T->>S: new Singleton()
+S-->>T: compile error — private ctor
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `SingletonService` core loop."
-
-Extension example: add new `ConfigManager` subclass or enum value + plug new Strategy at runtime.
+> "New `Concurrency` implementation plugs in at runtime — no change to `SingletonHolder`."
+>
+> "Add new `Singleton` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -142,58 +172,55 @@ Extension example: add new `ConfigManager` subclass or enum value + plug new Str
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Concurrency | Concurrency — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Thread safety:** Use enum singleton or synchronized
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (ConcurrencyException)
+- DCL: volatile instance + synchronized block on first create
+- Enum singleton — preferred for simplicity and serialization safety
+- No locking after instance published — performance
+- Class loading initializes holder only when referenced
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design thread-safe singleton starting with clarifying scope — in-memory, single process, core flows only."
+> "Singleton ensures exactly one instance in the JVM."
 >
-> "Entities I see: `Singleton`, `ConfigManager`. I'll group them into domain structure and a service facade."
+> "Enum approach: public enum Singleton { INSTANCE; } — Joshua Bloch recommended."
 >
-> "The variation point is Singleton — for example different policies or algorithms without changing the orchestration loop."
+> "DCL: check null, synchronize, check null again, construct with volatile field."
 >
-> "Core API: `getInstance()` — validate first, delegate to domain, return typed result."
+> "Holder idiom: static nested class holds instance — lazy and thread-safe via class init."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "Avoid synchronized getInstance() every call — performance bottleneck."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "Private constructor blocks external new; reflection needs test awareness."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "ConfigManager example: singleton holds app settings loaded once."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "In DI frameworks singleton is container-scoped — different lifecycle."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. Why is volatile required in DCL?
+2. Enum vs DCL — when to pick each?
+3. How to test code that calls getInstance()?
+4. Singleton anti-pattern in microservices?
 
 ---
 
 ## 14. Related Links
 
-- [Singleton pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Concurrency LLD track](../../04-concurrency-lld/README.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/concurrency/thread-safe-singleton/) (skeleton)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/concurrency/thread-safe-singleton/) (full)

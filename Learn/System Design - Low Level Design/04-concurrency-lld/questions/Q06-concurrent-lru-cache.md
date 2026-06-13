@@ -1,14 +1,25 @@
 # Concurrent LRU Cache
 
 **Track:** Concurrency LLD  
-**Companies:** Google, Meta  
+**Companies:** Amazon, Meta  
 **Difficulty:** Hard  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-X06-concurrent-lru-cache.md](../../../Case Studies/lld/concurrency/CS-LLD-X06-concurrent-lru-cache.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Caffeine cache concurrent eviction. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Thread-safe LRU cache with O(1) get/put under concurrent access.
+Design thread-safe LRU cache with fine-grained locking or ConcurrentHashMap.
 
 ---
 
@@ -16,26 +27,31 @@ Thread-safe LRU cache with O(1) get/put under concurrent access.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Concurrent LRU Cache? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Lock vs synchronized? | Justify choice |
+| 5 | Deadlock prevention? | Ordering or timeout |
+| 6 | Fairness? | Document starvation risk |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for concurrent lru cache
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- ConcurrentLRUCache handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Thread safety:** Segment locks or synchronized
+- Open-Closed via ConcurrentLRUCache interface at variation points
+- Constructor injection for testability
+- Correctness under concurrent access — no data races
+- Avoid deadlock — consistent lock ordering where multiple locks
 
 ---
 
@@ -43,46 +59,55 @@ Thread-safe LRU cache with O(1) get/put under concurrent access.
 
 | Entity | Role |
 |--------|------|
-| ConcurrentLRUCache | Core domain entity / service |
-| Node | Core domain entity / service |
-| Lock | Core domain entity / service |
+| `ConcurrentLRUCache` | Facade |
+| `Segment` | Lock shard |
+| `Node` | DLL entry |
+| `EvictionPolicy` | LRU order |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `ConcurrentLRUCache`, `Node`, `Lock`  
-**Verbs → methods:** `get(), put()` and related operations
+**Nouns → classes:** `ConcurrentLRUCache`, `Segment`, `Node`, `EvictionPolicy`  
+**Verbs → methods:** `get()`, `put()`, `size()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  ConcurrentLRUCacheService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +get()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  ConcurrentLRUCache │──────>│ Concurrency      │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteConcurrency│
+│  ConcurrentLRUCache │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  ConcurrentLRUCache     │────>│  Node  │
+│  Segment            │────>│  Node            │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +get(), put()
+    class ConcurrentLRUCache {
+        +V get(K key)
+        +void put(K key, V value)
+        +int size()
     }
-    class DomainRoot {
-        +execute()
+    class Segment {
+        +execute() void
     }
-    class Strategy {
+    class Node {
+        -key: K
+        -value: V
+        -prev, next: Node
+    }
+    class EvictionPolicy {
         <<interface>>
-        +apply()
+        +apply() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
 ```
 
 ---
@@ -90,9 +115,10 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class ConcurrentLRUCacheService {
-    public Result get(), put();
-    // Additional: validate, lookup, list as needed for Concurrent LRU Cache
+public class ConcurrentLRUCache {
+    public V get(K key);
+    public void put(K key, V value);
+    public int size();
 }
 ```
 
@@ -102,13 +128,13 @@ public class ConcurrentLRUCacheService {
 
 | Pattern | Application |
 |---------|-------------|
-| Concurrency | Primary variation point for concurrent lru cache |
-
+| Concurrency | Thread-safe design for Concurrent LRU Cache |
+| Synchronization | Locks, volatile, or concurrent collections |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** ConcurrentLRUCache orchestrates; entities hold state
+- **O:** New behavior via new ConcurrentLRUCache impl
+- **D:** Depend on ConcurrentLRUCache interface
 
 ---
 
@@ -118,24 +144,32 @@ public class ConcurrentLRUCacheService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: get()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as ConcurrentLRUCache
+participant D as ConcurrentLRUCache
+U->>S: get()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `ConcurrencyException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as ConcurrentLRUCache
+U->>S: get(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `ConcurrentLRUCacheService` core loop."
-
-Extension example: add new `Lock` subclass or enum value + plug new Strategy at runtime.
+> "New `Concurrency` implementation plugs in at runtime — no change to `ConcurrentLRUCache`."
+>
+> "Add new `ConcurrentLRUCache` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -143,58 +177,59 @@ Extension example: add new `Lock` subclass or enum value + plug new Strategy at 
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Concurrency | Concurrency — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Thread safety:** Segment locks or synchronized
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (ConcurrencyException)
+- Synchronize get/put or use read-write lock if read-heavy
+- Eviction during get must be atomic with list reorder
+- Alternative: ConcurrentHashMap + synchronized list head/tail
+- Document lock granularity tradeoff: whole cache vs per-segment
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design concurrent lru cache starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Concurrent LRU Cache — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `ConcurrentLRUCache`, `Node`, `Lock`. I'll group them into domain structure and a service facade."
+> "Entities: `ConcurrentLRUCache`, `Segment`, `Node`, `EvictionPolicy`. Domain structure separate from `ConcurrentLRUCache` orchestration."
 >
-> "The variation point is Concurrency — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design thread-safe LRU cache with fine-grained locking or ConcurrentHashMap."
 >
-> "Core API: `get(), put()` — validate first, delegate to domain, return typed result."
+> "`ConcurrentLRUCache` — facade; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`Segment` — lock shard; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`Node` — dll entry; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`ConcurrentLRUCache` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Concurrency` in isolation?
+2. How would you extend Concurrent LRU Cache without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [Concurrency pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Concurrency LLD track](../../04-concurrency-lld/README.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/concurrency/concurrent-lru-cache/) (skeleton)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/concurrency/concurrent-lru-cache/) (full)

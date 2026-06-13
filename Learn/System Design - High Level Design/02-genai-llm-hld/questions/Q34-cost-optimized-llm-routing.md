@@ -6,6 +6,18 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-G34-cost-optimized-llm-routing.md](../../../Case Studies/hld/genai/CS-HLD-G34-cost-optimized-llm-routing.md)
+> **End-to-end pair:** [Token Budget & Cost Control](../../../Case Studies/paired/CS-PAIR-20-token-budget-cost.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Real-world context modeled after Martian and OpenRouter — model routing by cost/latency. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a production system for: **Cost-Optimized LLM Routing**.

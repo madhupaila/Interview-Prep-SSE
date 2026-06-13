@@ -6,9 +6,20 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-LLD-X15-concurrent-hashmap-patterns.md](../../../Case Studies/lld/concurrency/CS-LLD-X15-concurrent-hashmap-patterns.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the ConcurrentHashMap Usage Patterns domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## 1. Problem Statement
 
-Design service using ConcurrentHashMap for cache and counters safely.
+Design patterns using ConcurrentHashMap: computeIfAbsent, size, iteration safety.
 
 ---
 
@@ -16,26 +27,31 @@ Design service using ConcurrentHashMap for cache and counters safely.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for ConcurrentHashMap Usage Patterns? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Lock vs synchronized? | Justify choice |
+| 5 | Deadlock prevention? | Ordering or timeout |
+| 6 | Fairness? | Document starvation risk |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for concurrenthashmap usage patterns
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- ConcurrentMapPatterns handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Thread safety:** compute() / merge()
+- Open-Closed via ConcurrentHashMap interface at variation points
+- Constructor injection for testability
+- Correctness under concurrent access — no data races
+- Avoid deadlock — consistent lock ordering where multiple locks
 
 ---
 
@@ -43,46 +59,57 @@ Design service using ConcurrentHashMap for cache and counters safely.
 
 | Entity | Role |
 |--------|------|
-| CounterService | Core domain entity / service |
-| CacheService | Core domain entity / service |
-| ConcurrentHashMap | Core domain entity / service |
+| `ConcurrentHashMap` | Map |
+| `CacheLoader` | computeIfAbsent |
+| `Counter` | Atomic increment |
+| `StripedLock` | Segment sync |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `CounterService`, `CacheService`, `ConcurrentHashMap`  
-**Verbs → methods:** `increment(key)` and related operations
+**Nouns → classes:** `ConcurrentHashMap`, `CacheLoader`, `Counter`, `StripedLock`  
+**Verbs → methods:** `create()`, `getById()`, `listAll()`, `delete()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  CounterServiceService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +increment()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  ConcurrentMapPatterns│──────>│ Concurrency      │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteConcurrency│
+│  ConcurrentHashMap  │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  CounterService     │────>│  CacheService  │
+│  CacheLoader        │────>│  Counter         │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +increment(key)
+    class ConcurrentMapPatterns {
+        +void create(ConcurrentHashMap entity)
+        +Optional<ConcurrentHashMap> getById(String id)
+        +List<ConcurrentHashMap> listAll()
+        +void delete(String id)
     }
-    class DomainRoot {
-        +execute()
+    class ConcurrentHashMap {
+        +execute() void
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class CacheLoader {
+        +execute() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class Counter {
+        +execute() void
+    }
+    class StripedLock {
+        +execute() void
+    }
+    ConcurrentMapPatterns --> ConcurrentHashMap
 ```
 
 ---
@@ -90,9 +117,11 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class CounterServiceService {
-    public Result increment(key);
-    // Additional: validate, lookup, list as needed for ConcurrentHashMap Usage Patterns
+public class ConcurrentMapPatterns {
+    public void create(ConcurrentHashMap entity);
+    public Optional<ConcurrentHashMap> getById(String id);
+    public List<ConcurrentHashMap> listAll();
+    public void delete(String id);
 }
 ```
 
@@ -102,13 +131,13 @@ public class CounterServiceService {
 
 | Pattern | Application |
 |---------|-------------|
-| Concurrency | Primary variation point for concurrenthashmap usage patterns |
-
+| Concurrency | Thread-safe design for ConcurrentHashMap Usage Patterns |
+| Synchronization | Locks, volatile, or concurrent collections |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** ConcurrentMapPatterns orchestrates; entities hold state
+- **O:** New behavior via new ConcurrentHashMap impl
+- **D:** Depend on ConcurrentHashMap interface
 
 ---
 
@@ -118,24 +147,32 @@ public class CounterServiceService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: increment()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as ConcurrentMapPatterns
+participant D as ConcurrentHashMap
+U->>S: create()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `ConcurrencyException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as ConcurrentMapPatterns
+U->>S: create(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `CounterServiceService` core loop."
-
-Extension example: add new `ConcurrentHashMap` subclass or enum value + plug new Strategy at runtime.
+> "New `Concurrency` implementation plugs in at runtime — no change to `ConcurrentMapPatterns`."
+>
+> "Add new `ConcurrentHashMap` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -143,58 +180,59 @@ Extension example: add new `ConcurrentHashMap` subclass or enum value + plug new
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Concurrency | Concurrency — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Thread safety:** compute() / merge()
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (ConcurrencyException)
+- Identify shared mutable state across threads
+- Use synchronized, Lock, or concurrent collections appropriately
+- Avoid deadlock — consistent lock acquisition order
+- Document happens-before relationships for interview clarity
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design concurrenthashmap usage patterns starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design ConcurrentHashMap Usage Patterns — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `CounterService`, `CacheService`, `ConcurrentHashMap`. I'll group them into domain structure and a service facade."
+> "Entities: `ConcurrentHashMap`, `CacheLoader`, `Counter`, `StripedLock`. Domain structure separate from `ConcurrentMapPatterns` orchestration."
 >
-> "The variation point is Concurrency — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design patterns using ConcurrentHashMap: computeIfAbsent, size, iteration safety."
 >
-> "Core API: `increment(key)` — validate first, delegate to domain, return typed result."
+> "`ConcurrentHashMap` — map; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`CacheLoader` — computeifabsent; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`Counter` — atomic increment; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`ConcurrentMapPatterns` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Concurrency` in isolation?
+2. How would you extend ConcurrentHashMap Usage Patterns without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [Concurrency pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Concurrency LLD track](../../04-concurrency-lld/README.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/concurrency/concurrent-hashmap-patterns/) (skeleton)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/concurrency/concurrent-hashmap-patterns/) (full)

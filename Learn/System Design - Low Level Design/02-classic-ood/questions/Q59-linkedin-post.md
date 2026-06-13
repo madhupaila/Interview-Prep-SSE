@@ -1,14 +1,25 @@
-# LinkedIn Post & Feed Item
+# LinkedIn Post
 
 **Track:** Classic OOD  
-**Companies:** LinkedIn  
+**Companies:** LinkedIn, Meta  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-O59-linkedin-post.md](../../../Case Studies/lld/classic-ood/CS-LLD-O59-linkedin-post.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the LinkedIn Post domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Design professional post object model with reactions and comments.
+Design professional post: text, mentions, visibility, engagement counts.
 
 ---
 
@@ -16,26 +27,30 @@ Design professional post object model with reactions and comments.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for LinkedIn Post? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design professional post? | Include in MVP — Design professional post |
+| 5 | Requirement: mentions? | Include in MVP — mentions |
+| 6 | Requirement: visibility? | Include in MVP — visibility |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for linkedin post & feed item
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- PostService handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via VisibilityPolicy interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,49 +58,61 @@ Design professional post object model with reactions and comments.
 
 | Entity | Role |
 |--------|------|
-| Post | Core domain entity / service |
-| Reaction | Core domain entity / service |
-| Comment | Core domain entity / service |
-| Author | Core domain entity / service |
-| FeedItem | Core domain entity / service |
-| PostService | Core domain entity / service |
+| `Post` | Content |
+| `Author` | User |
+| `Mention` | @user ref |
+| `Visibility` | PUBLIC/CONNECTIONS |
+| `Engagement` | Like/comment counts |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `Post`, `Reaction`, `Comment`, `Author`, `FeedItem`, `PostService`  
-**Verbs → methods:** `createPost(author, content)` and related operations
+**Nouns → classes:** `Post`, `Author`, `Mention`, `Visibility`, `Engagement`  
+**Verbs → methods:** `getFeed()`, `createPost()`, `addReaction()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  PostService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +createPost()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  PostService        │──────>│ Strategy         │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteStrategy │
+│  Post               │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Post     │────>│  Reaction  │
+│  Author             │────>│  Mention         │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +createPost(author, content)
+    class PostService {
+        +Feed getFeed(User user, Cursor cursor)
+        +Post createPost(User author, String content)
+        +void addReaction(String postId, Reaction reaction)
     }
-    class DomainRoot {
-        +execute()
+    class Post {
+        -content: String
+        +addReaction(Reaction) void
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class Author {
+        +execute() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class Mention {
+        +execute() void
+    }
+    class Visibility {
+        +execute() void
+    }
+    class Engagement {
+        +execute() void
+    }
+    PostService --> Post
 ```
 
 ---
@@ -94,8 +121,9 @@ classDiagram
 
 ```java
 public class PostService {
-    public Result createPost(author, content);
-    // Additional: validate, lookup, list as needed for LinkedIn Post & Feed Item
+    public Feed getFeed(User user, Cursor cursor);
+    public Post createPost(User author, String content);
+    public void addReaction(String postId, Reaction reaction);
 }
 ```
 
@@ -105,13 +133,12 @@ public class PostService {
 
 | Pattern | Application |
 |---------|-------------|
-| Composite | Primary variation point for linkedin post & feed item |
-| Observer | Secondary structure or creation |
+| Strategy | Variation point in LinkedIn Post |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** PostService orchestrates; entities hold state
+- **O:** New behavior via new VisibilityPolicy impl
+- **D:** Depend on VisibilityPolicy interface
 
 ---
 
@@ -121,24 +148,32 @@ public class PostService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: createPost()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as PostService
+participant D as Post
+U->>S: getFeed()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `DomainException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as PostService
+U->>S: getFeed(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `PostService` core loop."
-
-Extension example: add new `PostService` subclass or enum value + plug new Strategy at runtime.
+> "New `Strategy` implementation plugs in at runtime — no change to `PostService`."
+>
+> "Add new `Post` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -146,58 +181,58 @@ Extension example: add new `PostService` subclass or enum value + plug new Strat
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Strategy | Strategy — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (domain check)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design linkedin post & feed item starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design LinkedIn Post — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `Post`, `Reaction`, `Comment`, `Author`, `FeedItem`, `PostService`. I'll group them into domain structure and a service facade."
+> "Entities: `Post`, `Author`, `Mention`, `Visibility`, `Engagement`. Domain structure separate from `PostService` orchestration."
 >
-> "The variation point is Composite — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design professional post: text, mentions, visibility, engagement counts."
 >
-> "Core API: `createPost(author, content)` — validate first, delegate to domain, return typed result."
+> "`Post` — content; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`Author` — user; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`Mention` — @user ref; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`PostService` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Strategy` in isolation?
+2. How would you extend LinkedIn Post without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [Composite pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
 - [Java implementation](../../09-code-implementations/java/classic/linkedin-post/) (skeleton)
-

@@ -1,14 +1,26 @@
-# Web Crawler (Multi-threaded)
+# Web Crawler (Multithreaded)
 
 **Track:** Concurrency LLD  
-**Companies:** Google, Meta  
+**Companies:** Google, Microsoft  
 **Difficulty:** Hard  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-X11-web-crawler-multithreaded.md](../../../Case Studies/lld/concurrency/CS-LLD-X11-web-crawler-multithreaded.md)
+> **End-to-end pair:** [Web Crawler at Scale](../../../Case Studies/paired/CS-PAIR-19-web-crawler.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Googlebot — parallel fetch with URL frontier. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Design multi-threaded crawler with URL frontier and visited set.
+Design multi-threaded crawler with visited set, URL frontier, politeness.
 
 ---
 
@@ -16,26 +28,31 @@ Design multi-threaded crawler with URL frontier and visited set.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Web Crawler (Multithreaded)? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Lock vs synchronized? | Justify choice |
+| 5 | Deadlock prevention? | Ordering or timeout |
+| 6 | Fairness? | Document starvation risk |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for web crawler (multi-threaded)
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- WebCrawler handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Thread safety:** ConcurrentHashMap visited
+- Open-Closed via UrlFrontier interface at variation points
+- Constructor injection for testability
+- Correctness under concurrent access — no data races
+- Avoid deadlock — consistent lock ordering where multiple locks
 
 ---
 
@@ -43,48 +60,61 @@ Design multi-threaded crawler with URL frontier and visited set.
 
 | Entity | Role |
 |--------|------|
-| Crawler | Core domain entity / service |
-| UrlFrontier | Core domain entity / service |
-| VisitedSet | Core domain entity / service |
-| WorkerPool | Core domain entity / service |
-| PageFetcher | Core domain entity / service |
+| `Crawler` | Coordinator |
+| `UrlFrontier` | BFS queue |
+| `VisitedSet` | Dedup |
+| `Worker` | Fetch thread |
+| `PageParser` | Link extractor |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `Crawler`, `UrlFrontier`, `VisitedSet`, `WorkerPool`, `PageFetcher`  
-**Verbs → methods:** `crawl(seed)` and related operations
+**Nouns → classes:** `Crawler`, `UrlFrontier`, `VisitedSet`, `Worker`, `PageParser`  
+**Verbs → methods:** `addComment()`, `getThread()`, `upvote()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  CrawlerService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +crawl()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  WebCrawler         │──────>│ Concurrency      │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteConcurrency│
+│  Crawler            │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Crawler     │────>│  UrlFrontier  │
+│  UrlFrontier        │────>│  VisitedSet      │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +crawl(seed)
+    class WebCrawler {
+        +Comment addComment(String postId, String text, String parentId)
+        +List<Comment> getThread(String postId)
+        +void upvote(String commentId)
     }
-    class DomainRoot {
-        +execute()
+    class Crawler {
+        +execute() void
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class UrlFrontier {
+        +enqueue() void
+        +dequeue() Object
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class VisitedSet {
+        +execute() void
+    }
+    class Worker {
+        +execute() void
+    }
+    class PageParser {
+        +execute() void
+    }
+    WebCrawler --> Crawler
 ```
 
 ---
@@ -92,9 +122,10 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class CrawlerService {
-    public Result crawl(seed);
-    // Additional: validate, lookup, list as needed for Web Crawler (Multi-threaded)
+public class WebCrawler {
+    public Comment addComment(String postId, String text, String parentId);
+    public List<Comment> getThread(String postId);
+    public void upvote(String commentId);
 }
 ```
 
@@ -104,13 +135,13 @@ public class CrawlerService {
 
 | Pattern | Application |
 |---------|-------------|
-| Producer-Consumer | Primary variation point for web crawler (multi-threaded) |
-
+| Concurrency | Thread-safe design for Web Crawler (Multithreaded) |
+| Synchronization | Locks, volatile, or concurrent collections |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** WebCrawler orchestrates; entities hold state
+- **O:** New behavior via new UrlFrontier impl
+- **D:** Depend on UrlFrontier interface
 
 ---
 
@@ -120,24 +151,32 @@ public class CrawlerService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: crawl()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as WebCrawler
+participant D as Crawler
+U->>S: addComment()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `ConcurrencyException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as WebCrawler
+U->>S: addComment(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `CrawlerService` core loop."
-
-Extension example: add new `PageFetcher` subclass or enum value + plug new Strategy at runtime.
+> "New `Concurrency` implementation plugs in at runtime — no change to `WebCrawler`."
+>
+> "Add new `Crawler` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -145,58 +184,59 @@ Extension example: add new `PageFetcher` subclass or enum value + plug new Strat
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Concurrency | Concurrency — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Thread safety:** ConcurrentHashMap visited
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (ConcurrencyException)
+- Identify shared mutable state across threads
+- Use synchronized, Lock, or concurrent collections appropriately
+- Avoid deadlock — consistent lock acquisition order
+- Document happens-before relationships for interview clarity
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design web crawler (multi-threaded) starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Web Crawler (Multithreaded) — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `Crawler`, `UrlFrontier`, `VisitedSet`, `WorkerPool`, `PageFetcher`. I'll group them into domain structure and a service facade."
+> "Entities: `Crawler`, `UrlFrontier`, `VisitedSet`, `Worker`, `PageParser`. Domain structure separate from `WebCrawler` orchestration."
 >
-> "The variation point is Producer-Consumer — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design multi-threaded crawler with visited set, URL frontier, politeness."
 >
-> "Core API: `crawl(seed)` — validate first, delegate to domain, return typed result."
+> "`Crawler` — coordinator; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`UrlFrontier` — bfs queue; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`VisitedSet` — dedup; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`WebCrawler` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Concurrency` in isolation?
+2. How would you extend Web Crawler (Multithreaded) without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [Producer-Consumer pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Concurrency LLD track](../../04-concurrency-lld/README.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/concurrency/web-crawler-multithreaded/) (skeleton)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/concurrency/web-crawler-multithreaded/) (full)

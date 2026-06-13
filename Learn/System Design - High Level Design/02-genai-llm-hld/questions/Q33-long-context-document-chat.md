@@ -6,6 +6,17 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-G33-long-context-document-chat.md](../../../Case Studies/hld/genai/CS-HLD-G33-long-context-document-chat.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Real-world context modeled after Leading products in the Design Long-Context Document Chat (100K+) domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a production system for: **Long-Context Document Chat (100K+)**.

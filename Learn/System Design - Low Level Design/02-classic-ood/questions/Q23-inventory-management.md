@@ -6,6 +6,17 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-LLD-O23-inventory-management.md](../../../Case Studies/lld/classic-ood/CS-LLD-O23-inventory-management.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Inventory Management domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## 1. Problem Statement
 
 Design warehouse inventory: SKUs, stock levels, reserve, reorder alerts.
@@ -16,26 +27,27 @@ Design warehouse inventory: SKUs, stock levels, reserve, reorder alerts.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Inventory Management? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design warehouse inventory? | Include in MVP — Design warehouse inventory |
+| 5 | Requirement: stock levels? | Include in MVP — stock levels |
+| 6 | Requirement: reserve? | Include in MVP — reserve |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for inventory management
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- Create and cancel reservations with conflict checks
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via ReorderPolicy interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,49 +55,61 @@ Design warehouse inventory: SKUs, stock levels, reserve, reorder alerts.
 
 | Entity | Role |
 |--------|------|
-| Warehouse | Core domain entity / service |
-| SKU | Core domain entity / service |
-| StockItem | Core domain entity / service |
-| Reservation | Core domain entity / service |
-| InventoryService | Core domain entity / service |
-| ReorderPolicy | Core domain entity / service |
+| `Warehouse` | Storage site |
+| `SKU` | Product id |
+| `StockLevel` | Quantity on hand |
+| `Reservation` | Allocated stock |
+| `ReorderPolicy` | Low stock alert |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `Warehouse`, `SKU`, `StockItem`, `Reservation`, `InventoryService`, `ReorderPolicy`  
-**Verbs → methods:** `reserve(sku, qty)` and related operations
+**Nouns → classes:** `Warehouse`, `SKU`, `StockLevel`, `Reservation`, `ReorderPolicy`  
+**Verbs → methods:** `create()`, `cancel()`, `searchAvailable()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  WarehouseService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +reserve()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  InventoryService   │──────>│ Strategy         │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteStrategy │
+│  Warehouse          │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Warehouse     │────>│  SKU  │
+│  SKU                │────>│  StockLevel      │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +reserve(sku, qty)
+    class InventoryService {
+        +Booking create(Guest guest, Room room, LocalDateRange dates)
+        +void cancel(String bookingId)
+        +List<Room> searchAvailable(RoomType type, LocalDateRange dates)
     }
-    class DomainRoot {
-        +execute()
+    class Warehouse {
+        +execute() void
     }
-    class Strategy {
+    class SKU {
+        +execute() void
+    }
+    class StockLevel {
+        +execute() void
+    }
+    class Reservation {
+        +execute() void
+    }
+    class ReorderPolicy {
         <<interface>>
-        +apply()
+        +apply() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    InventoryService --> Warehouse
 ```
 
 ---
@@ -93,9 +117,10 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class WarehouseService {
-    public Result reserve(sku, qty);
-    // Additional: validate, lookup, list as needed for Inventory Management
+public class InventoryService {
+    public Booking create(Guest guest, Room room, LocalDateRange dates);
+    public void cancel(String bookingId);
+    public List<Room> searchAvailable(RoomType type, LocalDateRange dates);
 }
 ```
 
@@ -105,13 +130,12 @@ public class WarehouseService {
 
 | Pattern | Application |
 |---------|-------------|
-| Observer | Primary variation point for inventory management |
-| Strategy | Secondary structure or creation |
+| Strategy | Swappable algorithms |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** InventoryService orchestrates; entities hold state
+- **O:** New behavior via new ReorderPolicy impl
+- **D:** Depend on ReorderPolicy interface
 
 ---
 
@@ -121,24 +145,32 @@ public class WarehouseService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: reserve()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as InventoryService
+participant D as Warehouse
+U->>S: create()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `InsufficientStockException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as InventoryService
+U->>S: create(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `WarehouseService` core loop."
-
-Extension example: add new `ReorderPolicy` subclass or enum value + plug new Strategy at runtime.
+> "New `Strategy` implementation plugs in at runtime — no change to `InventoryService`."
+>
+> "Add new `Warehouse` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -146,58 +178,58 @@ Extension example: add new `ReorderPolicy` subclass or enum value + plug new Str
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Strategy | Strategy — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (InsufficientStockException)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design inventory management starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Inventory Management — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `Warehouse`, `SKU`, `StockItem`, `Reservation`, `InventoryService`, `ReorderPolicy`. I'll group them into domain structure and a service facade."
+> "Entities: `Warehouse`, `SKU`, `StockLevel`, `Reservation`, `ReorderPolicy`. Domain structure separate from `InventoryService` orchestration."
 >
-> "The variation point is Observer — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design warehouse inventory: SKUs, stock levels, reserve, reorder alerts."
 >
-> "Core API: `reserve(sku, qty)` — validate first, delegate to domain, return typed result."
+> "`Warehouse` — storage site; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`SKU` — product id; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`StockLevel` — quantity on hand; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`InventoryService` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Strategy` in isolation?
+2. How would you extend Inventory Management without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [Observer pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/classic/inventory-management/) (skeleton)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/classic/inventory-management/) (full)

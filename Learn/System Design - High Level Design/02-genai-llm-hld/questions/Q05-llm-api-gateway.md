@@ -6,6 +6,18 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-G05-llm-api-gateway.md](../../../Case Studies/hld/genai/CS-HLD-G05-llm-api-gateway.md)
+> **End-to-end pair:** [LLM API Gateway / Model Router](../../../Case Studies/paired/CS-PAIR-10-llm-api-gateway.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Real-world context modeled after OpenAI API and Azure OpenAI — model routing and quotas. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a production system for: **LLM API Gateway / Model Router**.

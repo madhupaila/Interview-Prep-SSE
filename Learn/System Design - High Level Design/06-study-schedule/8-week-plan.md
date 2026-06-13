@@ -16,7 +16,7 @@
 | Thu | Component picker | [04-component-picker.md](../00-interview-framework/04-component-picker.md) |
 | Fri | Senior SWE signals | [05-senior-swe-signals.md](../00-interview-framework/05-senior-swe-signals.md) |
 | Sat | Diagram playbook | [04-diagram-playbook/](../04-diagram-playbook/) |
-| Sun | **Mock:** Draw URL shortener skeleton in 15 min | Practice only |
+| Sun | **Mock:** Draw URL shortener skeleton in 15 min | [CS-HLD-C01 case study](../../Case%20Studies/hld/classic/CS-HLD-C01-url-shortener.md) then practice |
 
 **Deliverable:** Can draw any HLD skeleton in under 10 minutes.
 
@@ -32,7 +32,7 @@
 | Thu | Messaging & queues | [messaging-queues-streams.md](../01-core-concepts/messaging-queues-streams.md) |
 | Fri | APIs & microservices | [api-design-microservices.md](../01-core-concepts/api-design-microservices.md) |
 | Sat | Consistency, security, observability | Remaining concept files |
-| Sun | Memorize memory maps + 2 classic questions (Q01, Q02) | [memory-map-master.md](../01-core-concepts/memory-map-master.md) |
+| Sun | Memorize memory maps + 2 classic questions (Q01, Q02) | [memory-map-master.md](../01-core-concepts/memory-map-master.md), [URL shortener case study](../../Case%20Studies/hld/classic/CS-HLD-C01-url-shortener.md) |
 
 **Deliverable:** Can explain CAP, caching patterns, and sharding from memory.
 
@@ -47,7 +47,7 @@
 | Wed | LLM inference | [02-llm-inference-serving.md](../02-genai-llm-hld/02-llm-inference-serving.md) |
 | Thu | Agents & tool calling | [03-agents-tool-calling.md](../02-genai-llm-hld/03-agents-tool-calling.md) |
 | Fri | Eval, safety, cost | [04-evaluation-safety-cost.md](../02-genai-llm-hld/04-evaluation-safety-cost.md) |
-| Sat–Sun | Gen AI Q01–Q10 (2/day, speak aloud) | [questions/](../02-genai-llm-hld/questions/) |
+| Sat–Sun | Gen AI Q01–Q10 — **read case study first**, then speak question script | [Case Studies GenAI HLD](../../Case%20Studies/hld/genai/), [questions/](../02-genai-llm-hld/questions/) |
 
 **Deliverable:** Can whiteboard a RAG pipeline end-to-end.
 
@@ -59,7 +59,7 @@
 |-----|-------|
 | Mon–Fri | 2 questions/day (Q11–Q20), practice spoken scripts |
 | Sat | Gen AI memory map review |
-| Sun | **Mock:** RAG Document Q&A (45 min timed) |
+| Sun | **Mock:** RAG Document Q&A (45 min timed) | [CS-PAIR-01 Enterprise RAG](../../Case%20Studies/paired/CS-PAIR-01-enterprise-rag.md) → Q02 question |
 
 **Deliverable:** Fluent on agents, eval, hallucination mitigation.
 

@@ -6,6 +6,18 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-C30-parking-lot-elevator.md](../../../Case Studies/hld/classic/CS-HLD-C30-parking-lot-elevator.md)
+> **End-to-end pair:** [Parking Lot at Scale](../../../Case Studies/paired/CS-PAIR-02-parking-lot-at-scale.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Real-world context modeled after Otis elevator dispatch and smart parking platforms. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a scalable system for: **Parking Lot / Elevator**.

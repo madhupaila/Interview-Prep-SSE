@@ -6,6 +6,18 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-C14-notification-system.md](../../../Case Studies/hld/classic/CS-HLD-C14-notification-system.md)
+> **End-to-end pair:** [Notification System](../../../Case Studies/paired/CS-PAIR-13-notification-system.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Real-world context modeled after Twilio and Firebase Cloud Messaging. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a scalable system for: **Notification System**.

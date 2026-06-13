@@ -6,6 +6,17 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-G06-embedding-service-scale.md](../../../Case Studies/hld/genai/CS-HLD-G06-embedding-service-scale.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Real-world context modeled after OpenAI embeddings API and Cohere embed. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a production system for: **Embedding Service at Scale**.

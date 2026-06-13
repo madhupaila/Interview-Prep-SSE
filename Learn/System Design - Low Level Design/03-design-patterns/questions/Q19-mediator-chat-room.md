@@ -1,14 +1,25 @@
 # Mediator — Chat Room
 
 **Track:** Design Patterns  
-**Companies:** Slack, Discord  
+**Companies:** Discord, Slack  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-P19-mediator-chat-room.md](../../../Case Studies/lld/design-patterns/CS-LLD-P19-mediator-chat-room.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Mediator — Chat Room domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Mediate message delivery between users without direct coupling.
+Design mediator so users send messages through chat room, not peer-to-peer.
 
 ---
 
@@ -16,26 +27,27 @@ Mediate message delivery between users without direct coupling.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Mediator — Chat Room? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Overbooking? | No — reject overlapping dates |
+| 5 | Cancellation? | Policy-based cancel window |
+| 6 | Room types? | Enum RoomType |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for mediator — chat room
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- Send messages with delivery status tracking
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via ChatRoom interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,47 +55,59 @@ Mediate message delivery between users without direct coupling.
 
 | Entity | Role |
 |--------|------|
-| ChatRoom | Core domain entity / service |
-| User | Core domain entity / service |
-| Message | Core domain entity / service |
-| ChatMediator | Core domain entity / service |
+| `ChatRoom` | Mediator |
+| `User` | Colleague |
+| `Message` | Payload |
+| `ChatRoomMediator` | Routes messages |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `ChatRoom`, `User`, `Message`, `ChatMediator`  
-**Verbs → methods:** `send(message)` and related operations
+**Nouns → classes:** `ChatRoom`, `User`, `Message`, `ChatRoomMediator`  
+**Verbs → methods:** `sendMessage()`, `getOrCreate()`, `markRead()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  ChatRoomService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +send()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  ChatMediator       │──────>│ Mediator         │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteMediator │
+│  ChatRoom           │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  ChatRoom     │────>│  User  │
+│  User               │────>│  Message         │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +send(message)
+    class ChatMediator {
+        +Message sendMessage(String conversationId, String text)
+        +Conversation getOrCreate(User a, User b)
+        +void markRead(String messageId)
     }
-    class DomainRoot {
-        +execute()
+    class ChatRoom {
+        +execute() void
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class User {
+        -id: String
+        -name: String
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class Message {
+        -text: String
+        -status: DeliveryStatus
+        +markRead() void
+    }
+    class ChatRoomMediator {
+        +execute() void
+    }
+    ChatMediator --> ChatRoom
 ```
 
 ---
@@ -91,9 +115,10 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class ChatRoomService {
-    public Result send(message);
-    // Additional: validate, lookup, list as needed for Mediator — Chat Room
+public class ChatMediator {
+    public Message sendMessage(String conversationId, String text);
+    public Conversation getOrCreate(User a, User b);
+    public void markRead(String messageId);
 }
 ```
 
@@ -103,13 +128,12 @@ public class ChatRoomService {
 
 | Pattern | Application |
 |---------|-------------|
-| Mediator | Primary variation point for mediator — chat room |
-
+| Mediator | Demonstrate Mediator pattern in mediator-chat-room |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** ChatMediator orchestrates; entities hold state
+- **O:** New behavior via new ChatRoom impl
+- **D:** Depend on ChatRoom interface
 
 ---
 
@@ -119,24 +143,32 @@ public class ChatRoomService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: send()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as ChatMediator
+participant D as ChatRoom
+U->>S: sendMessage()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `DomainException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as ChatMediator
+U->>S: sendMessage(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `ChatRoomService` core loop."
-
-Extension example: add new `ChatMediator` subclass or enum value + plug new Strategy at runtime.
+> "New `Mediator` implementation plugs in at runtime — no change to `ChatMediator`."
+>
+> "Add new `ChatRoom` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -144,58 +176,58 @@ Extension example: add new `ChatMediator` subclass or enum value + plug new Stra
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Mediator | Mediator — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (domain check)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design mediator — chat room starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Mediator — Chat Room — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `ChatRoom`, `User`, `Message`, `ChatMediator`. I'll group them into domain structure and a service facade."
+> "Entities: `ChatRoom`, `User`, `Message`, `ChatRoomMediator`. Domain structure separate from `ChatMediator` orchestration."
 >
-> "The variation point is Mediator — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design mediator so users send messages through chat room, not peer-to-peer."
 >
-> "Core API: `send(message)` — validate first, delegate to domain, return typed result."
+> "`ChatRoom` — mediator; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`User` — colleague; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`Message` — payload; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`ChatMediator` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Mediator` in isolation?
+2. How would you extend Mediator — Chat Room without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [Mediator pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/patterns/mediator-chat-room/) (skeleton)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/patterns/mediator-chat-room/) (full)

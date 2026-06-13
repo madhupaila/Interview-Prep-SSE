@@ -6,6 +6,17 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-C61-backup-disaster-recovery.md](../../../Case Studies/hld/classic/CS-HLD-C61-backup-disaster-recovery.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Real-world context modeled after AWS Backup cross-region RPO/RTO. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a scalable system for: **Backup and Disaster Recovery**.

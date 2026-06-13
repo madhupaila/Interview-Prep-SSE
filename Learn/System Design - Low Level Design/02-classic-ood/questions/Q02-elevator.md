@@ -6,9 +6,20 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-LLD-O02-elevator.md](../../../Case Studies/lld/classic-ood/CS-LLD-O02-elevator.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Otis elevator group dispatch algorithms. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## 1. Problem Statement
 
-Design an elevator system for a building with multiple elevators serving multiple floors.
+Design an elevator system for a building with multiple elevators serving multiple floors. Support hall calls (up/down) and car calls (destination). Optimize dispatch.
 
 ---
 
@@ -16,26 +27,29 @@ Design an elevator system for a building with multiple elevators serving multipl
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | How many elevators and floors? | Configurable N elevators, M floors |
+| 2 | Scheduling algorithm? | Strategy — SCAN default |
+| 3 | Concurrent requests? | Yes — multiple floors press buttons simultaneously |
+| 4 | Elevator types? | Standard passenger; freight is extension |
+| 5 | Display status? | Show current floor and direction per elevator |
+| 6 | Persistence? | In-memory |
+| 7 | Emergency stop? | Extension — safety subsystem |
+| 8 | Weight limit? | Extension — capacity check |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for elevator system
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- Request elevator from floor with direction
+- Select elevator via scheduling strategy
+- Move elevator floor-by-floor serving queued requests
+- Process internal destination buttons
 
 **Non-Functional:**
-- Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Thread-safe request queue
+- Pluggable dispatch (Strategy)
+- Low coupling between Building and Elevator state machines
 
 ---
 
@@ -43,49 +57,66 @@ Design an elevator system for a building with multiple elevators serving multipl
 
 | Entity | Role |
 |--------|------|
-| Building | Core domain entity / service |
-| Elevator | Core domain entity / service |
-| ElevatorController | Core domain entity / service |
-| Request | Core domain entity / service |
-| Direction | Core domain entity / service |
-| SchedulingStrategy | Core domain entity / service |
-
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
+| `Building` | Owns floors and elevator bank |
+| `Elevator` | Current floor, direction, door state |
+| `ElevatorController` | Facade — accepts external requests |
+| `Request` | Floor + direction or destination |
+| `Direction` | UP, DOWN, IDLE enum |
+| `SchedulingStrategy` | Pick best elevator for hall call |
 
 **Nouns → classes:** `Building`, `Elevator`, `ElevatorController`, `Request`, `Direction`, `SchedulingStrategy`  
-**Verbs → methods:** `requestElevator(floor, direction)` and related operations
+**Verbs → methods:** `requestElevator(floor, direction)`, `selectElevator(Request)`, `step()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  BuildingService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +requestElevator()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  ElevatorController │──────>│ Strategy         │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteStrategy │
+│  Building           │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Building     │────>│  Elevator  │
+│  Elevator           │────>│  ElevatorController│
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +requestElevator(floor, direction)
+    class ElevatorController {
+        +void requestElevator(int floor, Direction direction)
+        +void selectDestination(Elevator e, int floor)
+        +void stepAll()
     }
-    class DomainRoot {
+    class Building {
+        +execute()
+    }
+    class Elevator {
+        +execute()
+    }
+    class ElevatorController {
+        +execute()
+    }
+    class Request {
+        +execute()
+    }
+    class Direction {
         +execute()
     }
     class Strategy {
         <<interface>>
         +apply()
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    ElevatorController --> Building
+    ElevatorController ..> Strategy
 ```
 
 ---
@@ -93,9 +124,10 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class BuildingService {
-    public Result requestElevator(floor, direction);
-    // Additional: validate, lookup, list as needed for Elevator System
+public class ElevatorController {
+    public void requestElevator(int floor, Direction direction);
+    public void selectDestination(Elevator e, int floor);
+    public void stepAll();
 }
 ```
 
@@ -105,13 +137,13 @@ public class BuildingService {
 
 | Pattern | Application |
 |---------|-------------|
-| Strategy | Primary variation point for elevator system |
-| State | Secondary structure or creation |
+| Strategy | SCAN, nearest-car, load-balancing dispatch |
+| State | Elevator door open/closed/moving |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** Elevator moves itself; controller only dispatches
+- **O:** New scheduler without changing Elevator
+- **D:** Controller depends on SchedulingStrategy interface
 
 ---
 
@@ -121,24 +153,34 @@ public class BuildingService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: requestElevator()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant C as ElevatorController
+participant ST as SchedulingStrategy
+participant E as Elevator
+U->>C: requestElevator(5, UP)
+C->>ST: select(elevators, request)
+ST-->>C: elevator2
+C->>E: addRequest(5, UP)
+E-->>U: assigned
 ```
 
-**Failure path:** Invalid input → throw `InvalidRequestException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant C as ElevatorController
+U->>C: requestElevator(99, UP)
+C-->>U: InvalidFloorException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `BuildingService` core loop."
-
-Extension example: add new `SchedulingStrategy` subclass or enum value + plug new Strategy at runtime.
+> "New dispatch policy: implement SchedulingStrategy and inject at startup."
+>
+> "Express elevator: subclass Elevator with restricted floor range."
 
 ---
 
@@ -146,51 +188,48 @@ Extension example: add new `SchedulingStrategy` subclass or enum value + plug ne
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Dispatch | if/else nearest | Strategy | Strategy — multiple algorithms |
+| Movement | simulate ticks | event-driven | tick simulation for LLD clarity |
+| Request storage | per-elevator PQ | global queue | per-elevator — locality |
+| Door state | enum | State pattern | enum unless complex interlocks |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (InvalidRequestException)
+- Synchronize addRequest on each Elevator instance
+- Invalid floor → InvalidFloorException
+- Duplicate hall call same floor — idempotent add
+- All elevators idle — nearest responds
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design elevator system starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll model a building with N elevators and a controller facade for external requests."
 >
-> "Entities I see: `Building`, `Elevator`, `ElevatorController`, `Request`, `Direction`, `SchedulingStrategy`. I'll group them into domain structure and a service facade."
+> "Hall calls carry floor + direction; car calls are destination floors inside the cabin."
 >
-> "The variation point is Strategy — for example different policies or algorithms without changing the orchestration loop."
+> "SchedulingStrategy picks the best elevator — default SCAN but swappable."
 >
-> "Core API: `requestElevator(floor, direction)` — validate first, delegate to domain, return typed result."
+> "Each Elevator maintains a priority queue of pending stops sorted by direction sweep."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "stepAll() advances simulation — move one floor, open doors, dequeue served requests."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "Thread safety: synchronize mutation of elevator request queues."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "State: IDLE, UP, DOWN with door OPEN/CLOSED enum on Elevator."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "For HLD scale — central dispatch service; LLD object graph unchanged."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you handle peak morning traffic?
+2. Design for elevator maintenance mode?
+3. How to prevent starvation on high floors?
+4. Unit test SCAN strategy in isolation?
 
 ---
 
@@ -198,7 +237,6 @@ Extension example: add new `SchedulingStrategy` subclass or enum value + plug ne
 
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
 - [Java implementation](../../09-code-implementations/java/classic/elevator/) (full)
-- HLD counterpart: [../System Design - High Level Design/03-classic-hld/questions/Q30-parking-lot-elevator.md](../System Design - High Level Design/03-classic-hld/questions/Q30-parking-lot-elevator.md)
-
+- [HLD counterpart](../System%20Design%20-%20High%20Level%20Design/03-classic-hld/questions/Q30-parking-lot-elevator.md)

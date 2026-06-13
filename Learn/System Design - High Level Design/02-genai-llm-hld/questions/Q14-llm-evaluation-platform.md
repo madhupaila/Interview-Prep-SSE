@@ -6,6 +6,18 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-G14-llm-evaluation-platform.md](../../../Case Studies/hld/genai/CS-HLD-G14-llm-evaluation-platform.md)
+> **End-to-end pair:** [LLM Evaluation Platform](../../../Case Studies/paired/CS-PAIR-15-llm-evaluation.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Real-world context modeled after Leading products in the Design LLM Evaluation Platform domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a production system for: **LLM Evaluation Platform**.

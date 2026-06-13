@@ -1,14 +1,25 @@
-# Memento — Editor Snapshots
+# Memento — Text Editor
 
 **Track:** Design Patterns  
-**Companies:** Microsoft  
+**Companies:** Microsoft, Adobe  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-P20-memento-text-editor.md](../../../Case Studies/lld/design-patterns/CS-LLD-P20-memento-text-editor.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Memento — Text Editor domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Save and restore editor state for undo history.
+Design memento for editor snapshots enabling undo to prior document state.
 
 ---
 
@@ -16,26 +27,30 @@ Save and restore editor state for undo history.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Memento — Text Editor? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design memento for editor snapshots enab? | Include in MVP — Design memento for editor snapshots enabling undo  |
+| 5 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 6 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for memento — editor snapshots
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- EditorMemento handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via Editor interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,47 +58,58 @@ Save and restore editor state for undo history.
 
 | Entity | Role |
 |--------|------|
-| Editor | Core domain entity / service |
-| Memento | Core domain entity / service |
-| Caretaker | Core domain entity / service |
-| EditorState | Core domain entity / service |
+| `Editor` | Originator |
+| `Memento` | Snapshot |
+| `HistoryCaretaker` | Stack of mementos |
+| `Document` | State |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `Editor`, `Memento`, `Caretaker`, `EditorState`  
-**Verbs → methods:** `save(), restore(memento)` and related operations
+**Nouns → classes:** `Editor`, `Memento`, `HistoryCaretaker`, `Document`  
+**Verbs → methods:** `create()`, `getById()`, `listAll()`, `delete()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  EditorService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +save()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  EditorMemento      │──────>│ Memento          │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteMemento  │
+│  Editor             │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Editor     │────>│  Memento  │
+│  Memento            │────>│  HistoryCaretaker│
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +save(), restore(memento)
+    class EditorMemento {
+        +void create(Editor entity)
+        +Optional<Editor> getById(String id)
+        +List<Editor> listAll()
+        +void delete(String id)
     }
-    class DomainRoot {
-        +execute()
+    class Editor {
+        +insert(String) void
+        +delete(int) void
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class Memento {
+        +execute() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class HistoryCaretaker {
+        +execute() void
+    }
+    class Document {
+        +execute() void
+    }
+    EditorMemento --> Editor
 ```
 
 ---
@@ -91,9 +117,11 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class EditorService {
-    public Result save(), restore(memento);
-    // Additional: validate, lookup, list as needed for Memento — Editor Snapshots
+public class EditorMemento {
+    public void create(Editor entity);
+    public Optional<Editor> getById(String id);
+    public List<Editor> listAll();
+    public void delete(String id);
 }
 ```
 
@@ -103,13 +131,12 @@ public class EditorService {
 
 | Pattern | Application |
 |---------|-------------|
-| Memento | Primary variation point for memento — editor snapshots |
-
+| Memento | Demonstrate Memento pattern in memento-text-editor |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** EditorMemento orchestrates; entities hold state
+- **O:** New behavior via new Editor impl
+- **D:** Depend on Editor interface
 
 ---
 
@@ -119,24 +146,32 @@ public class EditorService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: save()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as EditorMemento
+participant D as Editor
+U->>S: create()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `DomainException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as EditorMemento
+U->>S: create(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `EditorService` core loop."
-
-Extension example: add new `EditorState` subclass or enum value + plug new Strategy at runtime.
+> "New `Memento` implementation plugs in at runtime — no change to `EditorMemento`."
+>
+> "Add new `Editor` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -144,58 +179,58 @@ Extension example: add new `EditorState` subclass or enum value + plug new Strat
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Memento | Memento — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (domain check)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design memento — editor snapshots starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Memento — Text Editor — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `Editor`, `Memento`, `Caretaker`, `EditorState`. I'll group them into domain structure and a service facade."
+> "Entities: `Editor`, `Memento`, `HistoryCaretaker`, `Document`. Domain structure separate from `EditorMemento` orchestration."
 >
-> "The variation point is Memento — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design memento for editor snapshots enabling undo to prior document state."
 >
-> "Core API: `save(), restore(memento)` — validate first, delegate to domain, return typed result."
+> "`Editor` — originator; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`Memento` — snapshot; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`HistoryCaretaker` — stack of mementos; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`EditorMemento` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Memento` in isolation?
+2. How would you extend Memento — Text Editor without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [Memento pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/patterns/memento-text-editor/) (skeleton)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/patterns/memento-text-editor/) (full)

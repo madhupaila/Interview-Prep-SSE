@@ -1,14 +1,25 @@
 # Strategy — Shipping Calculator
 
 **Track:** Design Patterns  
-**Companies:** FedEx, Amazon  
+**Companies:** Amazon, FedEx  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-P23-strategy-shipping.md](../../../Case Studies/lld/design-patterns/CS-LLD-P23-strategy-shipping.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Strategy — Shipping Calculator domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Calculate shipping cost with standard, express, overnight strategies.
+Design shipping cost strategies: standard, express, overnight by weight/zone.
 
 ---
 
@@ -16,26 +27,30 @@ Calculate shipping cost with standard, express, overnight strategies.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Strategy — Shipping Calculator? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design shipping cost strategies? | Include in MVP — Design shipping cost strategies |
+| 5 | Requirement: standard? | Include in MVP — standard |
+| 6 | Requirement: express? | Include in MVP — express |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for strategy — shipping calculator
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- ShippingCalculator handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via ShippingStrategy interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,47 +58,58 @@ Calculate shipping cost with standard, express, overnight strategies.
 
 | Entity | Role |
 |--------|------|
-| ShippingStrategy | Core domain entity / service |
-| StandardShipping | Core domain entity / service |
-| ExpressShipping | Core domain entity / service |
-| ShippingCalculator | Core domain entity / service |
+| `ShippingStrategy` | Interface |
+| `StandardShipping` | Impl |
+| `ExpressShipping` | Impl |
+| `Package` | Weight + zone |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `ShippingStrategy`, `StandardShipping`, `ExpressShipping`, `ShippingCalculator`  
-**Verbs → methods:** `calculate(weight, distance)` and related operations
+**Nouns → classes:** `ShippingStrategy`, `StandardShipping`, `ExpressShipping`, `Package`  
+**Verbs → methods:** `create()`, `getById()`, `listAll()`, `delete()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  ShippingStrategyService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +calculate()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  ShippingCalculator │──────>│ Strategy         │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteStrategy │
+│  ShippingStrategy   │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  ShippingStrategy     │────>│  StandardShipping  │
+│  StandardShipping   │────>│  ExpressShipping │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +calculate(weight, distance)
+    class ShippingCalculator {
+        +void create(ShippingStrategy entity)
+        +Optional<ShippingStrategy> getById(String id)
+        +List<ShippingStrategy> listAll()
+        +void delete(String id)
     }
-    class DomainRoot {
-        +execute()
-    }
-    class Strategy {
+    class ShippingStrategy {
         <<interface>>
-        +apply()
+        +apply() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class StandardShipping {
+        +execute() void
+    }
+    class ExpressShipping {
+        +execute() void
+    }
+    class Package {
+        +execute() void
+    }
+    ShippingCalculator --> ShippingStrategy
 ```
 
 ---
@@ -91,9 +117,11 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class ShippingStrategyService {
-    public Result calculate(weight, distance);
-    // Additional: validate, lookup, list as needed for Strategy — Shipping Calculator
+public class ShippingCalculator {
+    public void create(ShippingStrategy entity);
+    public Optional<ShippingStrategy> getById(String id);
+    public List<ShippingStrategy> listAll();
+    public void delete(String id);
 }
 ```
 
@@ -103,13 +131,12 @@ public class ShippingStrategyService {
 
 | Pattern | Application |
 |---------|-------------|
-| Strategy | Primary variation point for strategy — shipping calculator |
-
+| Strategy | Demonstrate Strategy pattern in strategy-shipping |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** ShippingCalculator orchestrates; entities hold state
+- **O:** New behavior via new ShippingStrategy impl
+- **D:** Depend on ShippingStrategy interface
 
 ---
 
@@ -119,24 +146,32 @@ public class ShippingStrategyService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: calculate()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as ShippingCalculator
+participant D as ShippingStrategy
+U->>S: create()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `DomainException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as ShippingCalculator
+U->>S: create(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `ShippingStrategyService` core loop."
-
-Extension example: add new `ShippingCalculator` subclass or enum value + plug new Strategy at runtime.
+> "New `Strategy` implementation plugs in at runtime — no change to `ShippingCalculator`."
+>
+> "Add new `ShippingStrategy` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -144,51 +179,52 @@ Extension example: add new `ShippingCalculator` subclass or enum value + plug ne
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Strategy | Strategy — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (domain check)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design strategy — shipping calculator starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Strategy — Shipping Calculator — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `ShippingStrategy`, `StandardShipping`, `ExpressShipping`, `ShippingCalculator`. I'll group them into domain structure and a service facade."
+> "Entities: `ShippingStrategy`, `StandardShipping`, `ExpressShipping`, `Package`. Domain structure separate from `ShippingCalculator` orchestration."
 >
-> "The variation point is Strategy — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design shipping cost strategies: standard, express, overnight by weight/zone."
 >
-> "Core API: `calculate(weight, distance)` — validate first, delegate to domain, return typed result."
+> "`ShippingStrategy` — interface; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`StandardShipping` — impl; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`ExpressShipping` — impl; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`ShippingCalculator` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Strategy` in isolation?
+2. How would you extend Strategy — Shipping Calculator without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
@@ -196,6 +232,5 @@ Extension example: add new `ShippingCalculator` subclass or enum value + plug ne
 
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/patterns/strategy-shipping/) (skeleton)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/patterns/strategy-shipping/) (full)

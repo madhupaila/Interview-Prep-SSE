@@ -1,14 +1,25 @@
 # In-Memory File System
 
 **Track:** Classic OOD  
-**Companies:** Google, Amazon, Meta  
+**Companies:** Amazon, Google  
 **Difficulty:** Hard  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-O17-in-memory-file-system.md](../../../Case Studies/lld/classic-ood/CS-LLD-O17-in-memory-file-system.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the In-Memory File System domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Design Unix-like file system: directories, files, path navigation, size calculation.
+Design Unix-like in-memory FS: mkdir, ls, cd, touch, cat, find.
 
 ---
 
@@ -16,26 +27,29 @@ Design Unix-like file system: directories, files, path navigation, size calculat
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for In-Memory File System? | Core entities + 2 primary user flows |
+| 2 | Persistence required? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded access? | Yes if multiple users/gates — else single-threaded |
+| 4 | Operations? | mkdir, ls, cd, touch, cat, find, du |
+| 5 | Symlinks? | Extension |
+| 6 | Permissions? | Extension |
+| 7 | Max file size? | Unbounded in-memory |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for in-memory file system
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- FileSystem handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via INode interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,48 +57,60 @@ Design Unix-like file system: directories, files, path navigation, size calculat
 
 | Entity | Role |
 |--------|------|
-| FileSystemNode | Core domain entity / service |
-| File | Core domain entity / service |
-| Directory | Core domain entity / service |
-| Path | Core domain entity / service |
-| FileSystem | Core domain entity / service |
+| `FileSystem` | Root / |
+| `INode` | File or directory |
+| `Directory` | Children map |
+| `File` | Byte content |
+| `PathResolver` | Normalize paths |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `FileSystemNode`, `File`, `Directory`, `Path`, `FileSystem`  
-**Verbs → methods:** `mkdir(path)` and related operations
+**Nouns → classes:** `FileSystem`, `INode`, `Directory`, `File`, `PathResolver`  
+**Verbs → methods:** `mkdir()`, `cd()`, `ls()`, `cat()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  FileSystemNodeService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +mkdir()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  FileSystem         │──────>│ Composite        │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteComposite│
+│  FileSystem         │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  FileSystemNode     │────>│  File  │
+│  INode              │────>│  Directory       │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +mkdir(path)
+    class FileSystem {
+        +void mkdir(String path)
+        +void cd(String path)
+        +List<String> ls(String path)
+        +String cat(String path)
+        +long du(String path)
     }
-    class DomainRoot {
-        +execute()
+    class INode {
+        +execute() void
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class Directory {
+        -children: Map
+        +addChild(INode) void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class File {
+        -content: byte[]
+        +read() byte[]
+    }
+    class PathResolver {
+        +execute() void
+    }
 ```
 
 ---
@@ -92,9 +118,12 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class FileSystemNodeService {
-    public Result mkdir(path);
-    // Additional: validate, lookup, list as needed for In-Memory File System
+public class FileSystem {
+    public void mkdir(String path);
+    public void cd(String path);
+    public List<String> ls(String path);
+    public String cat(String path);
+    public long du(String path);
 }
 ```
 
@@ -104,13 +133,12 @@ public class FileSystemNodeService {
 
 | Pattern | Application |
 |---------|-------------|
-| Composite | Primary variation point for in-memory file system |
-
+| Composite | Directory contains files and subdirs |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** FileSystem orchestrates; entities hold state
+- **O:** New behavior via new INode impl
+- **D:** Depend on INode interface
 
 ---
 
@@ -120,24 +148,30 @@ public class FileSystemNodeService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: mkdir()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant FS as FileSystem
+participant D as Directory
+U->>FS: mkdir(/a/b)
+FS->>D: createPath()
+U->>FS: cd(/a/b)
+FS-->>U: ok
 ```
 
-**Failure path:** Invalid input → throw `PathNotFoundException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+U->>FS: cat(/missing)
+FS-->>U: PathNotFoundException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `FileSystemNodeService` core loop."
-
-Extension example: add new `FileSystem` subclass or enum value + plug new Strategy at runtime.
+> "New `Composite` implementation plugs in at runtime — no change to `FileSystem`."
+>
+> "Add new `FileSystem` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -145,58 +179,58 @@ Extension example: add new `FileSystem` subclass or enum value + plug new Strate
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Composite | Composite — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (PathNotFoundException)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design in-memory file system starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design In-Memory File System — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `FileSystemNode`, `File`, `Directory`, `Path`, `FileSystem`. I'll group them into domain structure and a service facade."
+> "Entities: `FileSystem`, `INode`, `Directory`, `File`, `PathResolver`. Domain structure separate from `FileSystem` orchestration."
 >
-> "The variation point is Composite — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design Unix-like in-memory FS: mkdir, ls, cd, touch, cat, find."
 >
-> "Core API: `mkdir(path)` — validate first, delegate to domain, return typed result."
+> "`FileSystem` — root /; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`INode` — file or directory; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`Directory` — children map; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`FileSystem` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. Add permissions chmod?
+2. Symbolic links?
+3. Copy/move operations?
+4. Persist FS snapshot?
 
 ---
 
 ## 14. Related Links
 
-- [Composite pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
 - [Java implementation](../../09-code-implementations/java/classic/in-memory-file-system/) (full)
-

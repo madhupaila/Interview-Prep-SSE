@@ -1,14 +1,25 @@
 # Drive-Thru System
 
 **Track:** Classic OOD  
-**Companies:** McDonalds, Chick-fil-A  
+**Companies:** Chick-fil-A, McDonald's  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-O53-drive-thru.md](../../../Case Studies/lld/classic-ood/CS-LLD-O53-drive-thru.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Drive-Thru System domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Design drive-thru lane: order, pay, pickup window coordination.
+Design drive-thru lane: order post, payment, pickup window sequencing.
 
 ---
 
@@ -16,26 +27,30 @@ Design drive-thru lane: order, pay, pickup window coordination.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Drive-Thru System? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design drive-thru lane? | Include in MVP — Design drive-thru lane |
+| 5 | Requirement: order post? | Include in MVP — order post |
+| 6 | Requirement: payment? | Include in MVP — payment |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for drive-thru system
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- DriveThruService handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via LaneSequence interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,48 +58,62 @@ Design drive-thru lane: order, pay, pickup window coordination.
 
 | Entity | Role |
 |--------|------|
-| DriveThruLane | Core domain entity / service |
-| Order | Core domain entity / service |
-| LaneStage | Core domain entity / service |
-| OrderTracker | Core domain entity / service |
-| DriveThruService | Core domain entity / service |
+| `DriveThruLane` | Single lane |
+| `OrderPost` | Menu board |
+| `VehicleQueue` | FIFO cars |
+| `Order` | Meal order |
+| `PickupWindow` | Handoff point |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `DriveThruLane`, `Order`, `LaneStage`, `OrderTracker`, `DriveThruService`  
-**Verbs → methods:** `advanceOrder(order)` and related operations
+**Nouns → classes:** `DriveThruLane`, `OrderPost`, `VehicleQueue`, `Order`, `PickupWindow`  
+**Verbs → methods:** `getFeed()`, `createPost()`, `addReaction()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  DriveThruLaneService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +advanceOrder()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  DriveThruService   │──────>│ Queue            │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteQueue    │
+│  DriveThruLane      │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  DriveThruLane     │────>│  Order  │
+│  OrderPost          │────>│  VehicleQueue    │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +advanceOrder(order)
+    class DriveThruService {
+        +Feed getFeed(User user, Cursor cursor)
+        +Post createPost(User author, String content)
+        +void addReaction(String postId, Reaction reaction)
     }
-    class DomainRoot {
-        +execute()
+    class DriveThruLane {
+        +execute() void
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class OrderPost {
+        +execute() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class VehicleQueue {
+        +execute() void
+    }
+    class Order {
+        -items: List
+        -status: OrderStatus
+        +addItem(Item) void
+    }
+    class PickupWindow {
+        +execute() void
+    }
+    DriveThruService --> DriveThruLane
 ```
 
 ---
@@ -92,9 +121,10 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class DriveThruLaneService {
-    public Result advanceOrder(order);
-    // Additional: validate, lookup, list as needed for Drive-Thru System
+public class DriveThruService {
+    public Feed getFeed(User user, Cursor cursor);
+    public Post createPost(User author, String content);
+    public void addReaction(String postId, Reaction reaction);
 }
 ```
 
@@ -104,13 +134,12 @@ public class DriveThruLaneService {
 
 | Pattern | Application |
 |---------|-------------|
-| State | Primary variation point for drive-thru system |
-| Pipeline | Secondary structure or creation |
+| Queue | FIFO ordering of work items |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** DriveThruService orchestrates; entities hold state
+- **O:** New behavior via new LaneSequence impl
+- **D:** Depend on LaneSequence interface
 
 ---
 
@@ -120,24 +149,32 @@ public class DriveThruLaneService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: advanceOrder()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as DriveThruService
+participant D as DriveThruLane
+U->>S: getFeed()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `DomainException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as DriveThruService
+U->>S: getFeed(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `DriveThruLaneService` core loop."
-
-Extension example: add new `DriveThruService` subclass or enum value + plug new Strategy at runtime.
+> "New `Queue` implementation plugs in at runtime — no change to `DriveThruService`."
+>
+> "Add new `DriveThruLane` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -145,58 +182,58 @@ Extension example: add new `DriveThruService` subclass or enum value + plug new 
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Queue | Queue — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (domain check)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design drive-thru system starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Drive-Thru System — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `DriveThruLane`, `Order`, `LaneStage`, `OrderTracker`, `DriveThruService`. I'll group them into domain structure and a service facade."
+> "Entities: `DriveThruLane`, `OrderPost`, `VehicleQueue`, `Order`, `PickupWindow`. Domain structure separate from `DriveThruService` orchestration."
 >
-> "The variation point is State — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design drive-thru lane: order post, payment, pickup window sequencing."
 >
-> "Core API: `advanceOrder(order)` — validate first, delegate to domain, return typed result."
+> "`DriveThruLane` — single lane; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`OrderPost` — menu board; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`VehicleQueue` — fifo cars; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`DriveThruService` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Queue` in isolation?
+2. How would you extend Drive-Thru System without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [State pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
 - [Java implementation](../../09-code-implementations/java/classic/drive-thru/) (skeleton)
-

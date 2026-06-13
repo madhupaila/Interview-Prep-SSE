@@ -6,9 +6,20 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-LLD-P07-adapter-legacy-payment.md](../../../Case Studies/lld/design-patterns/CS-LLD-P07-adapter-legacy-payment.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Adapter — Legacy Payment API domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## 1. Problem Statement
 
-Adapt legacy XML payment API to modern PaymentProcessor interface.
+Design adapter wrapping legacy XML payment API behind modern interface.
 
 ---
 
@@ -16,26 +27,30 @@ Adapt legacy XML payment API to modern PaymentProcessor interface.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Adapter — Legacy Payment API? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design adapter wrapping legacy XML payme? | Include in MVP — Design adapter wrapping legacy XML payment API beh |
+| 5 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 6 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for adapter — legacy payment api
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- PaymentAdapter handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via ModernPaymentGateway interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,47 +58,58 @@ Adapt legacy XML payment API to modern PaymentProcessor interface.
 
 | Entity | Role |
 |--------|------|
-| LegacyPaymentAPI | Core domain entity / service |
-| PaymentAdapter | Core domain entity / service |
-| PaymentProcessor | Core domain entity / service |
-| ModernClient | Core domain entity / service |
+| `ModernPaymentGateway` | Target interface |
+| `LegacyPaymentAPI` | Adaptee |
+| `LegacyPaymentAdapter` | Adapter |
+| `PaymentRequest` | DTO |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `LegacyPaymentAPI`, `PaymentAdapter`, `PaymentProcessor`, `ModernClient`  
-**Verbs → methods:** `charge(amount)` and related operations
+**Nouns → classes:** `ModernPaymentGateway`, `LegacyPaymentAPI`, `LegacyPaymentAdapter`, `PaymentRequest`  
+**Verbs → methods:** `create()`, `getById()`, `listAll()`, `delete()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  LegacyPaymentAPIService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +charge()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  PaymentAdapter     │──────>│ Adapter          │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteAdapter  │
+│  ModernPaymentGateway│       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  LegacyPaymentAPI     │────>│  PaymentAdapter  │
+│  LegacyPaymentAPI   │────>│  LegacyPaymentAdapter│
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +charge(amount)
+    class PaymentAdapter {
+        +void create(ModernPaymentGateway entity)
+        +Optional<ModernPaymentGateway> getById(String id)
+        +List<ModernPaymentGateway> listAll()
+        +void delete(String id)
     }
-    class DomainRoot {
-        +execute()
-    }
-    class Strategy {
+    class ModernPaymentGateway {
         <<interface>>
-        +apply()
+        +apply() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class LegacyPaymentAPI {
+        +execute() void
+    }
+    class LegacyPaymentAdapter {
+        +execute() void
+    }
+    class PaymentRequest {
+        +execute() void
+    }
+    PaymentAdapter --> ModernPaymentGateway
 ```
 
 ---
@@ -91,9 +117,11 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class LegacyPaymentAPIService {
-    public Result charge(amount);
-    // Additional: validate, lookup, list as needed for Adapter — Legacy Payment API
+public class PaymentAdapter {
+    public void create(ModernPaymentGateway entity);
+    public Optional<ModernPaymentGateway> getById(String id);
+    public List<ModernPaymentGateway> listAll();
+    public void delete(String id);
 }
 ```
 
@@ -103,13 +131,12 @@ public class LegacyPaymentAPIService {
 
 | Pattern | Application |
 |---------|-------------|
-| Adapter | Primary variation point for adapter — legacy payment api |
-
+| Adapter | Demonstrate Adapter pattern in adapter-legacy-payment |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** PaymentAdapter orchestrates; entities hold state
+- **O:** New behavior via new ModernPaymentGateway impl
+- **D:** Depend on ModernPaymentGateway interface
 
 ---
 
@@ -119,24 +146,32 @@ public class LegacyPaymentAPIService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: charge()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as PaymentAdapter
+participant D as ModernPaymentGateway
+U->>S: create()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `DomainException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as PaymentAdapter
+U->>S: create(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `LegacyPaymentAPIService` core loop."
-
-Extension example: add new `ModernClient` subclass or enum value + plug new Strategy at runtime.
+> "New `Adapter` implementation plugs in at runtime — no change to `PaymentAdapter`."
+>
+> "Add new `ModernPaymentGateway` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -144,58 +179,58 @@ Extension example: add new `ModernClient` subclass or enum value + plug new Stra
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Adapter | Adapter — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (domain check)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design adapter — legacy payment api starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Adapter — Legacy Payment API — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `LegacyPaymentAPI`, `PaymentAdapter`, `PaymentProcessor`, `ModernClient`. I'll group them into domain structure and a service facade."
+> "Entities: `ModernPaymentGateway`, `LegacyPaymentAPI`, `LegacyPaymentAdapter`, `PaymentRequest`. Domain structure separate from `PaymentAdapter` orchestration."
 >
-> "The variation point is Adapter — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design adapter wrapping legacy XML payment API behind modern interface."
 >
-> "Core API: `charge(amount)` — validate first, delegate to domain, return typed result."
+> "`ModernPaymentGateway` — target interface; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`LegacyPaymentAPI` — adaptee; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`LegacyPaymentAdapter` — adapter; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`PaymentAdapter` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Adapter` in isolation?
+2. How would you extend Adapter — Legacy Payment API without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [Adapter pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/patterns/adapter-legacy-payment/) (skeleton)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/patterns/adapter-legacy-payment/) (full)

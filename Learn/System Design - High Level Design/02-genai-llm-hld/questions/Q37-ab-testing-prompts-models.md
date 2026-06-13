@@ -6,6 +6,17 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-G37-ab-testing-prompts-models.md](../../../Case Studies/hld/genai/CS-HLD-G37-ab-testing-prompts-models.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Real-world context modeled after Leading products in the Design A/B Testing for Prompts/Models domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a production system for: **A/B Testing for Prompts/Models**.

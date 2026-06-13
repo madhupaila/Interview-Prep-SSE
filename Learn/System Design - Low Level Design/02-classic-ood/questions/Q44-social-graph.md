@@ -6,9 +6,20 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-LLD-O44-social-graph.md](../../../Case Studies/lld/classic-ood/CS-LLD-O44-social-graph.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Leading products in the Social Graph domain. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## 1. Problem Statement
 
-Design social graph: friends, friend requests, suggestions.
+Design social graph: follow/friend edges, suggestions, BFS reach.
 
 ---
 
@@ -16,26 +27,30 @@ Design social graph: friends, friend requests, suggestions.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Social Graph? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design social graph? | Include in MVP — Design social graph |
+| 5 | Requirement: follow/friend edges? | Include in MVP — follow/friend edges |
+| 6 | Requirement: suggestions? | Include in MVP — suggestions |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for social graph
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- GraphService handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via SuggestionEngine interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,49 +58,62 @@ Design social graph: friends, friend requests, suggestions.
 
 | Entity | Role |
 |--------|------|
-| User | Core domain entity / service |
-| Friendship | Core domain entity / service |
-| FriendRequest | Core domain entity / service |
-| SocialGraph | Core domain entity / service |
-| GraphService | Core domain entity / service |
-| SuggestionStrategy | Core domain entity / service |
+| `User` | Node |
+| `Relationship` | Edge type |
+| `SocialGraph` | Adjacency store |
+| `Follow` | Directed edge |
+| `SuggestionEngine` | Friend-of-friend |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `User`, `Friendship`, `FriendRequest`, `SocialGraph`, `GraphService`, `SuggestionStrategy`  
-**Verbs → methods:** `sendRequest(from, to)` and related operations
+**Nouns → classes:** `User`, `Relationship`, `SocialGraph`, `Follow`, `SuggestionEngine`  
+**Verbs → methods:** `create()`, `getById()`, `listAll()`, `delete()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  UserService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +sendRequest()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  GraphService       │──────>│ Repository       │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteRepository│
+│  User               │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  User     │────>│  Friendship  │
+│  Relationship       │────>│  SocialGraph     │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +sendRequest(from, to)
+    class GraphService {
+        +void create(User entity)
+        +Optional<User> getById(String id)
+        +List<User> listAll()
+        +void delete(String id)
     }
-    class DomainRoot {
-        +execute()
+    class User {
+        -id: String
+        -name: String
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class Relationship {
+        +execute() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class SocialGraph {
+        +execute() void
+    }
+    class Follow {
+        +execute() void
+    }
+    class SuggestionEngine {
+        +execute() void
+    }
+    GraphService --> User
 ```
 
 ---
@@ -93,9 +121,11 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class UserService {
-    public Result sendRequest(from, to);
-    // Additional: validate, lookup, list as needed for Social Graph
+public class GraphService {
+    public void create(User entity);
+    public Optional<User> getById(String id);
+    public List<User> listAll();
+    public void delete(String id);
 }
 ```
 
@@ -105,13 +135,12 @@ public class UserService {
 
 | Pattern | Application |
 |---------|-------------|
-| Graph | Primary variation point for social graph |
-| Strategy | Secondary structure or creation |
+| Repository | Persistence abstraction |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** GraphService orchestrates; entities hold state
+- **O:** New behavior via new SuggestionEngine impl
+- **D:** Depend on SuggestionEngine interface
 
 ---
 
@@ -121,24 +150,32 @@ public class UserService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: sendRequest()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as GraphService
+participant D as User
+U->>S: create()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `AlreadyFriendsException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as GraphService
+U->>S: create(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `UserService` core loop."
-
-Extension example: add new `SuggestionStrategy` subclass or enum value + plug new Strategy at runtime.
+> "New `Repository` implementation plugs in at runtime — no change to `GraphService`."
+>
+> "Add new `User` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -146,59 +183,58 @@ Extension example: add new `SuggestionStrategy` subclass or enum value + plug ne
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Repository | Repository — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (AlreadyFriendsException)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design social graph starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Social Graph — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `User`, `Friendship`, `FriendRequest`, `SocialGraph`, `GraphService`, `SuggestionStrategy`. I'll group them into domain structure and a service facade."
+> "Entities: `User`, `Relationship`, `SocialGraph`, `Follow`, `SuggestionEngine`. Domain structure separate from `GraphService` orchestration."
 >
-> "The variation point is Graph — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design social graph: follow/friend edges, suggestions, BFS reach."
 >
-> "Core API: `sendRequest(from, to)` — validate first, delegate to domain, return typed result."
+> "`User` — node; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`Relationship` — edge type; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`SocialGraph` — adjacency store; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`GraphService` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Repository` in isolation?
+2. How would you extend Social Graph without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [Graph pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
 - [Java implementation](../../09-code-implementations/java/classic/social-graph/) (skeleton)
-- HLD counterpart: [../System Design - High Level Design/03-classic-hld/questions/Q41-linkedin-connections.md](../System Design - High Level Design/03-classic-hld/questions/Q41-linkedin-connections.md)
-

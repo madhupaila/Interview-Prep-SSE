@@ -1,14 +1,25 @@
 # Shopping Cart
 
 **Track:** Classic OOD  
-**Companies:** Amazon, eBay, Walmart  
+**Companies:** Amazon, Walmart, Shopify  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-O22-shopping-cart.md](../../../Case Studies/lld/classic-ood/CS-LLD-O22-shopping-cart.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Amazon cart and checkout session. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Design e-commerce cart: add/remove items, apply coupons, checkout.
+Design e-commerce cart: add/remove items, quantity, apply coupon, checkout.
 
 ---
 
@@ -16,26 +27,27 @@ Design e-commerce cart: add/remove items, apply coupons, checkout.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Shopping Cart? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Requirement: Design e-commerce cart? | Include in MVP — Design e-commerce cart |
+| 5 | Requirement: add/remove items? | Include in MVP — add/remove items |
+| 6 | Requirement: quantity? | Include in MVP — quantity |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for shopping cart
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- Checkout and return items with business rules
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via DiscountStrategy interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,49 +55,63 @@ Design e-commerce cart: add/remove items, apply coupons, checkout.
 
 | Entity | Role |
 |--------|------|
-| Cart | Core domain entity / service |
-| CartItem | Core domain entity / service |
-| Product | Core domain entity / service |
-| Coupon | Core domain entity / service |
-| PricingEngine | Core domain entity / service |
-| CheckoutService | Core domain entity / service |
+| `ShoppingCart` | Session cart |
+| `CartItem` | SKU + qty |
+| `Product` | Catalog item |
+| `Customer` | Shopper |
+| `Coupon` | Discount rule |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `Cart`, `CartItem`, `Product`, `Coupon`, `PricingEngine`, `CheckoutService`  
-**Verbs → methods:** `addItem(product, qty)` and related operations
+**Nouns → classes:** `ShoppingCart`, `CartItem`, `Product`, `Customer`, `Coupon`  
+**Verbs → methods:** `checkout()`, `returnItem()`, `reserve()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  CartService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +addItem()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  CartService        │──────>│ Strategy         │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteStrategy │
+│  ShoppingCart       │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Cart     │────>│  CartItem  │
+│  CartItem           │────>│  Product         │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +addItem(product, qty)
+    class CartService {
+        +Loan checkout(Member member, String id)
+        +void returnItem(String id)
+        +void reserve(String isbn)
     }
-    class DomainRoot {
-        +execute()
+    class ShoppingCart {
+        +addItem(SKU, int) void
+        +removeItem(SKU) void
+        +total() Money
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class CartItem {
+        +execute() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class Product {
+        +execute() void
+    }
+    class Customer {
+        +execute() void
+    }
+    class Coupon {
+        -code: String
+        +isValid(Cart) boolean
+    }
+    CartService --> ShoppingCart
 ```
 
 ---
@@ -94,8 +120,9 @@ classDiagram
 
 ```java
 public class CartService {
-    public Result addItem(product, qty);
-    // Additional: validate, lookup, list as needed for Shopping Cart
+    public Loan checkout(Member member, String id);
+    public void returnItem(String id);
+    public void reserve(String isbn);
 }
 ```
 
@@ -105,13 +132,12 @@ public class CartService {
 
 | Pattern | Application |
 |---------|-------------|
-| Strategy | Primary variation point for shopping cart |
-| Decorator | Secondary structure or creation |
+| Strategy | Variation point in Shopping Cart |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** CartService orchestrates; entities hold state
+- **O:** New behavior via new DiscountStrategy impl
+- **D:** Depend on DiscountStrategy interface
 
 ---
 
@@ -121,24 +147,32 @@ public class CartService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: addItem()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as CartService
+participant D as ShoppingCart
+U->>S: checkout()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `EmptyCartException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as CartService
+U->>S: checkout(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `CartService` core loop."
-
-Extension example: add new `CheckoutService` subclass or enum value + plug new Strategy at runtime.
+> "New `Strategy` implementation plugs in at runtime — no change to `CartService`."
+>
+> "Add new `ShoppingCart` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -146,51 +180,52 @@ Extension example: add new `CheckoutService` subclass or enum value + plug new S
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Strategy | Strategy — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (EmptyCartException)
+- Per-session cart — ConcurrentHashMap by sessionId if multi-thread
+- addItem validates inventory via InventoryService
+- checkout is single-use — clear cart after order
+- Coupon apply validates expiry and usage limits
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design shopping cart starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Shopping Cart — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `Cart`, `CartItem`, `Product`, `Coupon`, `PricingEngine`, `CheckoutService`. I'll group them into domain structure and a service facade."
+> "Entities: `ShoppingCart`, `CartItem`, `Product`, `Customer`, `Coupon`. Domain structure separate from `CartService` orchestration."
 >
-> "The variation point is Strategy — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design e-commerce cart: add/remove items, quantity, apply coupon, checkout."
 >
-> "Core API: `addItem(product, qty)` — validate first, delegate to domain, return typed result."
+> "`ShoppingCart` — session cart; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`CartItem` — sku + qty; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`Product` — catalog item; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`CartService` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Strategy` in isolation?
+2. How would you extend Shopping Cart without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
@@ -198,7 +233,5 @@ Extension example: add new `CheckoutService` subclass or enum value + plug new S
 
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/classic/shopping-cart/) (skeleton)
-- HLD counterpart: [../System Design - High Level Design/03-classic-hld/questions/Q18-ecommerce-amazon.md](../System Design - High Level Design/03-classic-hld/questions/Q18-ecommerce-amazon.md)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/classic/shopping-cart/) (full)

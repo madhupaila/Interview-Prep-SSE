@@ -1,14 +1,25 @@
-# Bank Transfer — Deadlock Avoidance
+# Bank Transfer Deadlock
 
 **Track:** Concurrency LLD  
-**Companies:** JP Morgan, Stripe  
+**Companies:** Goldman, Citibank  
 **Difficulty:** Hard  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-X14-bank-transfer-deadlock.md](../../../Case Studies/lld/concurrency/CS-LLD-X14-bank-transfer-deadlock.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Banking transfer ordering to prevent deadlock. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Transfer between accounts concurrently without deadlock.
+Design deadlock-free concurrent transfers between bank accounts.
 
 ---
 
@@ -16,26 +27,31 @@ Transfer between accounts concurrently without deadlock.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Bank Transfer Deadlock? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Lock vs synchronized? | Justify choice |
+| 5 | Deadlock prevention? | Ordering or timeout |
+| 6 | Fairness? | Document starvation risk |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for bank transfer — deadlock avoidance
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- TransferService handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Thread safety:** Ordered lock on account IDs
+- Open-Closed via LockOrdering interface at variation points
+- Constructor injection for testability
+- Correctness under concurrent access — no data races
+- Avoid deadlock — consistent lock ordering where multiple locks
 
 ---
 
@@ -43,47 +59,59 @@ Transfer between accounts concurrently without deadlock.
 
 | Entity | Role |
 |--------|------|
-| Account | Core domain entity / service |
-| TransferService | Core domain entity / service |
-| Lock | Core domain entity / service |
-| Transaction | Core domain entity / service |
+| `Account` | Balance |
+| `Transfer` | Move funds |
+| `LockOrdering` | Consistent lock order |
+| `TransactionLog` | Audit |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `Account`, `TransferService`, `Lock`, `Transaction`  
-**Verbs → methods:** `transfer(from, to, amount)` and related operations
+**Nouns → classes:** `Account`, `Transfer`, `LockOrdering`, `TransactionLog`  
+**Verbs → methods:** `create()`, `getById()`, `listAll()`, `delete()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  AccountService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +transfer()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  TransferService    │──────>│ Concurrency      │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteConcurrency│
+│  Account            │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Account     │────>│  TransferService  │
+│  Transfer           │────>│  LockOrdering    │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +transfer(from, to, amount)
+    class TransferService {
+        +void create(Account entity)
+        +Optional<Account> getById(String id)
+        +List<Account> listAll()
+        +void delete(String id)
     }
-    class DomainRoot {
-        +execute()
+    class Account {
+        -balance: BigDecimal
+        +debit(BigDecimal) void
+        +credit(BigDecimal) void
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class Transfer {
+        +execute() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class LockOrdering {
+        +execute() void
+    }
+    class TransactionLog {
+        +execute() void
+    }
+    TransferService --> Account
 ```
 
 ---
@@ -91,9 +119,11 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class AccountService {
-    public Result transfer(from, to, amount);
-    // Additional: validate, lookup, list as needed for Bank Transfer — Deadlock Avoidance
+public class TransferService {
+    public void create(Account entity);
+    public Optional<Account> getById(String id);
+    public List<Account> listAll();
+    public void delete(String id);
 }
 ```
 
@@ -103,13 +133,13 @@ public class AccountService {
 
 | Pattern | Application |
 |---------|-------------|
-| Concurrency | Primary variation point for bank transfer — deadlock avoidance |
-
+| Concurrency | Thread-safe design for Bank Transfer Deadlock |
+| Synchronization | Locks, volatile, or concurrent collections |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** TransferService orchestrates; entities hold state
+- **O:** New behavior via new LockOrdering impl
+- **D:** Depend on LockOrdering interface
 
 ---
 
@@ -119,24 +149,29 @@ public class AccountService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: transfer()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant T as TransferService
+participant A1 as Account1
+participant A2 as Account2
+T->>A1: lock(id order)
+T->>A2: lock(id order)
+T->>A1: debit()
+T->>A2: credit()
 ```
 
-**Failure path:** Invalid input → throw `ConcurrencyException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+Note over T: Without ordering — Thread1 locks A1, Thread2 locks A2 → deadlock
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `AccountService` core loop."
-
-Extension example: add new `Transaction` subclass or enum value + plug new Strategy at runtime.
+> "New `Concurrency` implementation plugs in at runtime — no change to `TransferService`."
+>
+> "Add new `Account` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -144,58 +179,59 @@ Extension example: add new `Transaction` subclass or enum value + plug new Strat
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Concurrency | Concurrency — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Thread safety:** Ordered lock on account IDs
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (ConcurrencyException)
+- Always lock accounts in ascending ID order — global total ordering
+- Never hold lock on A then try B while another thread holds B and tries A
+- Transfer is atomic: debit source, credit dest in same synchronized block
+- Insufficient funds → InsufficientFundsException before any mutation
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design bank transfer — deadlock avoidance starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Bank Transfer Deadlock — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `Account`, `TransferService`, `Lock`, `Transaction`. I'll group them into domain structure and a service facade."
+> "Entities: `Account`, `Transfer`, `LockOrdering`, `TransactionLog`. Domain structure separate from `TransferService` orchestration."
 >
-> "The variation point is Concurrency — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design deadlock-free concurrent transfers between bank accounts."
 >
-> "Core API: `transfer(from, to, amount)` — validate first, delegate to domain, return typed result."
+> "`Account` — balance; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`Transfer` — move funds; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`LockOrdering` — consistent lock order; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`TransferService` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Concurrency` in isolation?
+2. How would you extend Bank Transfer Deadlock without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [Concurrency pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Concurrency LLD track](../../04-concurrency-lld/README.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/concurrency/bank-transfer-deadlock/) (skeleton)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/concurrency/bank-transfer-deadlock/) (full)

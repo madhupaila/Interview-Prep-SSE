@@ -6,6 +6,17 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-C01-url-shortener.md](../../../Case Studies/hld/classic/CS-HLD-C01-url-shortener.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Marketing teams share 100M new links/day; redirects hit 10B/day (100:1 read-heavy). Peak redirect QPS ~350K requires CDN + Redis. Product also wants custom aliases for enterprise tier.
+
+**Key constraints:** Read QPS, Storage, Abuse, ID uniqueness
+
+---
+
 ## Problem Statement
 
 Design a URL shortening service like bit.ly: long URLs → short codes, redirect on click, optional analytics.

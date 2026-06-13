@@ -6,6 +6,18 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-C43-rate-limited-api-platform.md](../../../Case Studies/hld/classic/CS-HLD-C43-rate-limited-api-platform.md)
+> **End-to-end pair:** [Rate-Limited API Platform](../../../Case Studies/paired/CS-PAIR-04-rate-limited-api.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Real-world context modeled after Stripe and Cloudflare — API rate limits and abuse protection. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a scalable system for: **Rate-Limited API Platform**.

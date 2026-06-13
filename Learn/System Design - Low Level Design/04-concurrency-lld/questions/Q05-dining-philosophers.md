@@ -1,14 +1,25 @@
 # Dining Philosophers
 
 **Track:** Concurrency LLD  
-**Companies:** Amazon, Google  
+**Companies:** Amazon, Microsoft  
 **Difficulty:** Hard  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-X05-dining-philosophers.md](../../../Case Studies/lld/concurrency/CS-LLD-X05-dining-philosophers.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Classic concurrency problem — resource ordering. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Solve dining philosophers with deadlock-free fork acquisition.
+Design deadlock-free dining philosophers with fork acquisition ordering.
 
 ---
 
@@ -16,26 +27,30 @@ Solve dining philosophers with deadlock-free fork acquisition.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Dining Philosophers? | Core entities + 2 primary user flows |
+| 2 | Persistence required? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded access? | Yes if multiple users/gates — else single-threaded |
+| 4 | Deadlock prevention? | Ordered fork pickup or waiter |
+| 5 | Philosopher count? | Configurable N |
+| 6 | Eat time? | Random or fixed think/eat cycles |
+| 7 | Waiter arbitrator? | Alternative to ordered forks |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for dining philosophers
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- DiningTable handles primary workflow described in requirements
+- Validate inputs before state changes
+- Enforce domain constraints with exceptions
+- Support listing and lookup of core entities
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Thread safety:** Ordered fork pickup
+- Open-Closed via Fork interface at variation points
+- Constructor injection for testability
+- Correctness under concurrent access — no data races
+- Avoid deadlock — consistent lock ordering where multiple locks
 
 ---
 
@@ -43,46 +58,59 @@ Solve dining philosophers with deadlock-free fork acquisition.
 
 | Entity | Role |
 |--------|------|
-| Philosopher | Core domain entity / service |
-| Fork | Core domain entity / service |
-| Table | Core domain entity / service |
+| `Philosopher` | Thread |
+| `Fork` | Shared resource |
+| `Table` | Seat arrangement |
+| `Waiter` | Arbitrator optional |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `Philosopher`, `Fork`, `Table`  
-**Verbs → methods:** `dine()` and related operations
+**Nouns → classes:** `Philosopher`, `Fork`, `Table`, `Waiter`  
+**Verbs → methods:** `create()`, `getById()`, `listAll()`, `delete()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  PhilosopherService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +dine()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  DiningTable        │──────>│ Concurrency      │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteConcurrency│
+│  Philosopher        │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Philosopher     │────>│  Fork  │
+│  Fork               │────>│  Table           │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +dine()
+    class DiningTable {
+        +void create(Philosopher entity)
+        +Optional<Philosopher> getById(String id)
+        +List<Philosopher> listAll()
+        +void delete(String id)
     }
-    class DomainRoot {
-        +execute()
+    class Philosopher {
+        +think() void
+        +eat() void
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class Fork {
+        +pickUp() void
+        +putDown() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class Table {
+        +execute() void
+    }
+    class Waiter {
+        +execute() void
+    }
+    DiningTable --> Philosopher
 ```
 
 ---
@@ -90,9 +118,11 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class PhilosopherService {
-    public Result dine();
-    // Additional: validate, lookup, list as needed for Dining Philosophers
+public class DiningTable {
+    public void create(Philosopher entity);
+    public Optional<Philosopher> getById(String id);
+    public List<Philosopher> listAll();
+    public void delete(String id);
 }
 ```
 
@@ -102,13 +132,12 @@ public class PhilosopherService {
 
 | Pattern | Application |
 |---------|-------------|
-| Concurrency | Primary variation point for dining philosophers |
-
+| Concurrency | Ordered fork acquisition avoids deadlock |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** DiningTable orchestrates; entities hold state
+- **O:** New behavior via new Fork impl
+- **D:** Depend on Fork interface
 
 ---
 
@@ -118,24 +147,33 @@ public class PhilosopherService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: dine()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant P as Philosopher
+participant F as Fork
+participant T as Table
+P->>T: pickLeftFork()
+P->>T: pickRightFork()
+P->>T: eat()
+P->>T: releaseForks()
 ```
 
-**Failure path:** Invalid input → throw `ConcurrencyException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant P1 as Phil1
+participant P2 as Phil2
+P1->>F: pickLeft
+P2->>F: pickRight
+Note over P1,P2: deadlock without ordering
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `PhilosopherService` core loop."
-
-Extension example: add new `Table` subclass or enum value + plug new Strategy at runtime.
+> "New `Concurrency` implementation plugs in at runtime — no change to `DiningTable`."
+>
+> "Add new `Philosopher` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -143,58 +181,59 @@ Extension example: add new `Table` subclass or enum value + plug new Strategy at
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Concurrency | Concurrency — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Thread safety:** Ordered fork pickup
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (ConcurrencyException)
+- Deadlock without ordering — demonstrate then fix with fork ID ordering
+- synchronized(fork) or ReentrantLock per fork
+- Waiter pattern: centralized arbitrator avoids hold-and-wait
+- Starvation possible — fair lock or waiter queue extension
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design dining philosophers starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Dining Philosophers — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `Philosopher`, `Fork`, `Table`. I'll group them into domain structure and a service facade."
+> "Entities: `Philosopher`, `Fork`, `Table`, `Waiter`. Domain structure separate from `DiningTable` orchestration."
 >
-> "The variation point is Concurrency — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design deadlock-free dining philosophers with fork acquisition ordering."
 >
-> "Core API: `dine()` — validate first, delegate to domain, return typed result."
+> "`Philosopher` — thread; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`Fork` — shared resource; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`Table` — seat arrangement; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`DiningTable` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. Compare waiter vs ordered forks?
+2. What if one philosopher is greedy?
+3. Extend to multiple tables?
+4. Model with semaphores instead?
 
 ---
 
 ## 14. Related Links
 
-- [Concurrency pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Concurrency LLD track](../../04-concurrency-lld/README.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
-- [Java implementation](../../09-code-implementations/java/concurrency/dining-philosophers/) (skeleton)
-
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
+- [Java implementation](../../09-code-implementations/java/concurrency/dining-philosophers/) (full)

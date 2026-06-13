@@ -1,14 +1,25 @@
 # Chess Game
 
 **Track:** Classic OOD  
-**Companies:** Microsoft, Facebook, Google  
+**Companies:** Microsoft, Google, Meta  
 **Difficulty:** Hard  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-O06-chess.md](../../../Case Studies/lld/classic-ood/CS-LLD-O06-chess.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Chess.com game engine and move validation. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Design a chess game for two players: board, pieces, move validation, check/checkmate.
+Design a two-player chess game with move validation, check/checkmate, turn management.
 
 ---
 
@@ -16,26 +27,26 @@ Design a chess game for two players: board, pieces, move validation, check/check
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Chess Game? | Core entities + 2 primary user flows |
+| 2 | Persistence required? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded access? | Yes if multiple users/gates — else single-threaded |
+| 4 | Two players? | Human vs human MVP |
+| 5 | Castling / en passant? | Include in move rules |
+| 6 | Draw rules? | Stalemate MVP; repetition extension |
+| 7 | Undo? | Command pattern extension |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for chess game
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- Execute game turns with rule validation
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
+- Open-Closed via MoveValidator interface at variation points
+- Constructor injection for testability
+- Thread-safe if concurrent access is in clarifying assumptions
 
 ---
 
@@ -43,49 +54,68 @@ Design a chess game for two players: board, pieces, move validation, check/check
 
 | Entity | Role |
 |--------|------|
-| Board | Core domain entity / service |
-| Cell | Core domain entity / service |
-| ChessPiece | Core domain entity / service |
-| King | Core domain entity / service |
-| Queen | Core domain entity / service |
-| Move | Core domain entity / service |
+| `Board` | 8x8 grid |
+| `Piece` | Abstract piece |
+| `Move` | From/to squares |
+| `Player` | Color side |
+| `MoveValidator` | Legal move rules |
+| `GameState` | ACTIVE/CHECKMATE |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `Board`, `Cell`, `ChessPiece`, `King`, `Queen`, `Move`, `Game`, `MoveValidator`  
-**Verbs → methods:** `makeMove(from, to)` and related operations
+**Nouns → classes:** `Board`, `Piece`, `Move`, `Player`, `MoveValidator`, `GameState`  
+**Verbs → methods:** `makeMove()`, `isInCheck()`, `getState()`, `getLegalMoves()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  BoardService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +makeMove()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  ChessGame          │──────>│ Strategy         │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteStrategy │
+│  Board              │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Board     │────>│  Cell  │
+│  Piece              │────>│  Move            │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +makeMove(from, to)
+    class ChessGame {
+        +boolean makeMove(Move move)
+        +boolean isInCheck(Player player)
+        +GameState getState()
+        +List<Move> getLegalMoves()
     }
-    class DomainRoot {
-        +execute()
+    class Board {
+        -cells: Cell[][]
+        +getPiece(int,int) Piece
+        +movePiece(Move) void
     }
-    class Strategy {
+    class Piece {
+        +execute() void
+    }
+    class Move {
+        +execute() void
+    }
+    class Player {
+        +execute() void
+    }
+    class MoveValidator {
         <<interface>>
-        +apply()
+        +validate(Board, Move) boolean
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class GameState {
+        +execute() void
+    }
+    ChessGame --> Board
 ```
 
 ---
@@ -93,9 +123,11 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class BoardService {
-    public Result makeMove(from, to);
-    // Additional: validate, lookup, list as needed for Chess Game
+public class ChessGame {
+    public boolean makeMove(Move move);
+    public boolean isInCheck(Player player);
+    public GameState getState();
+    public List<Move> getLegalMoves();
 }
 ```
 
@@ -105,13 +137,13 @@ public class BoardService {
 
 | Pattern | Application |
 |---------|-------------|
-| Strategy | Primary variation point for chess game |
-| Factory | Secondary structure or creation |
+| Strategy | Per-piece move rules |
+| Template Method | Turn loop skeleton |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** ChessGame orchestrates; entities hold state
+- **O:** New behavior via new MoveValidator impl
+- **D:** Depend on MoveValidator interface
 
 ---
 
@@ -121,24 +153,32 @@ public class BoardService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: makeMove()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant U as User
+participant S as ChessGame
+participant D as Board
+U->>S: makeMove()
+S->>D: validate / process
+D-->>S: ok
+S-->>U: result
 ```
 
-**Failure path:** Invalid input → throw `InvalidMoveException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+participant U as User
+participant S as ChessGame
+U->>S: makeMove(invalid)
+S-->>U: DomainException
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `BoardService` core loop."
-
-Extension example: add new `MoveValidator` subclass or enum value + plug new Strategy at runtime.
+> "New `Strategy` implementation plugs in at runtime — no change to `ChessGame`."
+>
+> "Add new `Board` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -146,51 +186,52 @@ Extension example: add new `MoveValidator` subclass or enum value + plug new Str
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Piece rules | switch type | polymorphism | polymorphism — OCP |
+| Move validation | in Piece | MoveValidator | split — SRP |
+| Board | 2D array | Map of squares | 2D array — simple |
+| Undo | none | Command | Command extension |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Concurrency:** Single-threaded unless multi-user access specified. Use synchronized on shared mutable state if needed.
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (InvalidMoveException)
+- Single-threaded MVP unless clarifying assumes concurrent access
+- If multi-user: synchronize on mutable aggregates or use concurrent collections
+- Fail fast on invalid input with domain exceptions
+- Idempotent retries where duplicate operations are possible
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design chess game starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Chess Game — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `Board`, `Cell`, `ChessPiece`, `King`, `Queen`, `Move`, `Game`, `MoveValidator`. I'll group them into domain structure and a service facade."
+> "Entities: `Board`, `Piece`, `Move`, `Player`, `MoveValidator`, `GameState`. Domain structure separate from `ChessGame` orchestration."
 >
-> "The variation point is Strategy — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design a two-player chess game with move validation, check/checkmate, turn management."
 >
-> "Core API: `makeMove(from, to)` — validate first, delegate to domain, return typed result."
+> "`Board` — 8x8 grid; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`Piece` — abstract piece; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`Move` — from/to squares; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`ChessGame` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. Implement castling and en passant?
+2. Add move history with Command undo?
+3. Detect threefold repetition?
+4. AI opponent via minimax extension?
 
 ---
 
@@ -198,6 +239,5 @@ Extension example: add new `MoveValidator` subclass or enum value + plug new Str
 
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
 - [Java implementation](../../09-code-implementations/java/classic/chess/) (full)
-

@@ -6,6 +6,18 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-G02-rag-document-qa.md](../../../Case Studies/hld/genai/CS-HLD-G02-rag-document-qa.md)
+> **End-to-end pair:** [Enterprise RAG Document Q&A](../../../Case Studies/paired/CS-PAIR-01-enterprise-rag.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Acme Corp (fictional enterprise) has 10K B2B tenants, 10M documents, and 50M queries/day. Legal and compliance require **citations on every answer** and **zero cross-tenant data leaks**. The product team must ship MVP in 8 weeks with a team of 4 engineers.
+
+**Key constraints:** Budget, Team, Timeline, Compliance
+
+---
+
 ## Problem Statement
 
 Design an enterprise document Q&A system: employees upload PDFs, Word docs, wikis; ask natural language questions; receive grounded answers with citations. Multi-tenant B2B SaaS.

@@ -1,14 +1,25 @@
 # Producer-Consumer
 
 **Track:** Concurrency LLD  
-**Companies:** Amazon, Microsoft  
+**Companies:** Amazon, Oracle  
 **Difficulty:** Medium  
+
+---
+
+## Case Study
+
+> **Full case study:** [CS-LLD-X03-producer-consumer.md](../../../Case Studies/lld/concurrency/CS-LLD-X03-producer-consumer.md)
+> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+
+**Business context:** Real-world context modeled after Kafka consumer groups pattern. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
 
 ---
 
 ## 1. Problem Statement
 
-Design producer-consumer with shared buffer and multiple threads.
+Design producer-consumer with shared bounded buffer and wait/notify.
 
 ---
 
@@ -16,26 +27,28 @@ Design producer-consumer with shared buffer and multiple threads.
 
 | # | Question | Expected answer |
 |---|----------|-----------------|
-| 1 | Single process or multi-threaded? | In-memory, single JVM; thread-safe if concurrent |
-| 2 | Persistence needed? | In-memory for MVP; Repository interface if asked |
-| 3 | MVP scope? | Core entities + 2 main flows |
-| 4 | Extensibility? | One variation point via Strategy/interface |
-| 5 | Error handling? | Domain exceptions, fail fast |
+| 1 | What is MVP scope for Producer-Consumer? | Core entities + 2 primary flows; extensions deferred |
+| 2 | Persistence? | In-memory; Repository interface if interviewer asks |
+| 3 | Multi-threaded? | Synchronize shared state if concurrent users assumed |
+| 4 | Lock vs synchronized? | Justify choice |
+| 5 | Deadlock prevention? | Ordering or timeout |
+| 6 | Fairness? | Document starvation risk |
+| 7 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
+| 8 | Scale to distributed? | Single JVM LLD; pivot HLD if asked |
 
 ---
 
 ## 3. Functional & Non-Functional Requirements
 
 **Functional:**
-- Core operations for producer-consumer
-- Validate inputs and enforce business rules
-- Support primary user flows end-to-end
+- Deliver notifications via configured channels
 
 **Non-Functional:**
 - Clear separation of concerns (SOLID)
-- Extensible without modifying core logic (Open-Closed)
-- Testable via dependency injection
-- **Thread safety:** BlockingQueue
+- Open-Closed via SharedBuffer interface at variation points
+- Constructor injection for testability
+- Correctness under concurrent access — no data races
+- Avoid deadlock — consistent lock ordering where multiple locks
 
 ---
 
@@ -43,47 +56,56 @@ Design producer-consumer with shared buffer and multiple threads.
 
 | Entity | Role |
 |--------|------|
-| Producer | Core domain entity / service |
-| Consumer | Core domain entity / service |
-| SharedBuffer | Core domain entity / service |
-| BlockingQueue | Core domain entity / service |
+| `Producer` | Adds items |
+| `Consumer` | Removes items |
+| `SharedBuffer` | Bounded queue |
+| `Coordinator` | Start/stop |
 
-**Relationships:** Service orchestrates domain entities; Strategy/interface at variation points.
-
-**Nouns → classes:** `Producer`, `Consumer`, `SharedBuffer`, `BlockingQueue`  
-**Verbs → methods:** `produce(), consume()` and related operations
+**Nouns → classes:** `Producer`, `Consumer`, `SharedBuffer`, `Coordinator`  
+**Verbs → methods:** `produce()`, `consume()`
 
 ---
 
 ## 5. Class Diagram
 
 ```
-┌─────────────────────┐
-│  ProducerService │──────> Strategy / Factory (interface)
-│─────────────────────│
-│ +produce()  │
+┌─────────────────────┐       ┌──────────────────┐
+│  ProducerConsumer   │──────>│ Producer-Consumer │<<interface>>
+│─────────────────────│       │──────────────────│
+│ +orchestrate()      │       │ +apply()         │
+└─────────┬───────────┘       └────────┬─────────┘
+          │ owns                       │ implements
+          ▼                   ┌────────▼─────────┐
+┌─────────────────────┐       │ ConcreteProducer-Consumer│
+│  Producer           │       └──────────────────┘
 └─────────┬───────────┘
-          │ uses
+          │ *
           ▼
 ┌─────────────────────┐     ┌──────────────────┐
-│  Producer     │────>│  Consumer  │
+│  Consumer           │────>│  SharedBuffer    │
 └─────────────────────┘     └──────────────────┘
 ```
 
 ```mermaid
 classDiagram
-    class MainService {
-        +produce(), consume()
+    class ProducerConsumer {
+        +void produce(T item)
+        +T consume()
     }
-    class DomainRoot {
-        +execute()
+    class Producer {
+        +execute() void
     }
-    class Strategy {
-        <<interface>>
-        +apply()
+    class Consumer {
+        +execute() void
     }
-    MainService --> DomainRoot
-    MainService ..> Strategy
+    class SharedBuffer {
+        +enqueue() void
+        +dequeue() Object
+    }
+    class Coordinator {
+        +execute() void
+    }
+    ProducerConsumer --> Producer
 ```
 
 ---
@@ -91,9 +113,9 @@ classDiagram
 ## 6. Public API / Key Methods
 
 ```java
-public class ProducerService {
-    public Result produce(), consume();
-    // Additional: validate, lookup, list as needed for Producer-Consumer
+public class ProducerConsumer {
+    public void produce(T item);
+    public T consume();
 }
 ```
 
@@ -103,13 +125,12 @@ public class ProducerService {
 
 | Pattern | Application |
 |---------|-------------|
-| Producer-Consumer | Primary variation point for producer-consumer |
-
+| Producer-Consumer | BlockingQueue between threads |
 
 **SOLID:**
-- **S:** Service orchestrates; entities hold domain state
-- **O:** New behavior via new Strategy/impl
-- **D:** Depend on interfaces, not concrete classes
+- **S:** ProducerConsumer orchestrates; entities hold state
+- **O:** New behavior via new SharedBuffer impl
+- **D:** Depend on SharedBuffer interface
 
 ---
 
@@ -119,24 +140,31 @@ public class ProducerService {
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant S as Service
-    participant D as Domain
-    U->>S: produce()
-    S->>D: validate / process
-    D-->>S: result
-    S-->>U: success
+participant Prod as Producer
+participant Q as BlockingQueue
+participant Cons as Consumer
+Prod->>Q: put(item)
+Q->>Cons: take()
+Cons-->>Cons: process(item)
 ```
 
-**Failure path:** Invalid input → throw `ConcurrencyException` with clear message.
+**Failure path:**
+
+```mermaid
+sequenceDiagram
+Prod->>Q: put(item)
+Note over Q: queue full — producer blocks
+Cons->>Q: take()
+Q-->>Prod: notify
+```
 
 ---
 
 ## 9. Extensibility
 
-> "To add new behavior, I'd introduce a new implementation of the Strategy interface — e.g. new pricing rule, allocation policy, or payment gateway — without editing `ProducerService` core loop."
-
-Extension example: add new `BlockingQueue` subclass or enum value + plug new Strategy at runtime.
+> "New `Producer-Consumer` implementation plugs in at runtime — no change to `ProducerConsumer`."
+>
+> "Add new `Producer` subtypes or enum values for new categories — Open-Closed."
 
 ---
 
@@ -144,58 +172,59 @@ Extension example: add new `BlockingQueue` subclass or enum value + plug new Str
 
 | Decision | A | B | Pick |
 |----------|---|---|------|
-| State modeling | enum | State pattern | enum for simple; State for complex transitions |
-| Variation | Strategy | if/else | Strategy for 2+ algorithms |
-| Storage | in-memory Map | Repository interface | in-memory MVP; Repository if persistence asked |
-| API return | domain object | primitive | domain object (type safety) |
+| Variation | if/else | Producer-Consumer | Producer-Consumer — 2+ behaviors |
+| State | enum | State pattern | enum for simple lifecycles |
+| Storage | in-memory | Repository | in-memory MVP |
+| API return | primitive | domain object | domain object — type safety |
 
 ---
 
 ## 11. Concurrency & Edge Cases
 
-
-**Thread safety:** BlockingQueue
-
-- Null/invalid input → fail fast with domain exception
-- Empty collections → handle gracefully
-- Duplicate operations → idempotent where applicable (ConcurrencyException)
+- BlockingQueue: wait/notify when full or empty
+- Multiple producers/consumers — queue is shared synchronized structure
+- Poison pill pattern to shut down consumers gracefully
+- Spurious wakeup handled by while loop on condition
 
 ---
 
 ## 12. Interview Answer Script (15 min)
 
-> "I'll design producer-consumer starting with clarifying scope — in-memory, single process, core flows only."
+> "I'll design Producer-Consumer — clarify in-memory scope and MVP flows first."
 >
-> "Entities I see: `Producer`, `Consumer`, `SharedBuffer`, `BlockingQueue`. I'll group them into domain structure and a service facade."
+> "Entities: `Producer`, `Consumer`, `SharedBuffer`, `Coordinator`. Domain structure separate from `ProducerConsumer` orchestration."
 >
-> "The variation point is Producer-Consumer — for example different policies or algorithms without changing the orchestration loop."
+> "Problem: Design producer-consumer with shared bounded buffer and wait/notify."
 >
-> "Core API: `produce(), consume()` — validate first, delegate to domain, return typed result."
+> "`Producer` — adds items; owns its own invariants."
 >
-> "For extensibility, new behavior = new interface implementation. Open-Closed principle."
+> "`Consumer` — removes items; owns its own invariants."
 >
-> "Tradeoff: I'd use enum for simple states; State pattern only if transitions have side effects."
+> "`SharedBuffer` — bounded queue; owns its own invariants."
 >
-> "I can sketch the service method in Java — inject dependencies via constructor for testability."
+> "`ProducerConsumer` validates input, coordinates entities, returns typed results."
 >
-> "If we needed millions of users and distributed deployment, I'd pivot to HLD — cache, queue, DB — but object model stays the same."
+> "Identify variation points — inject interfaces for Open-Closed extensibility."
+>
+> "Walk happy path on whiteboard, then failure case with domain exception."
+>
+> "Tradeoff: enum vs State pattern; Strategy vs if/else — pick with justification."
 
 ---
 
 ## 13. Follow-Up Questions
 
-1. How would you make this thread-safe?
-2. How would you add persistence?
-3. How would you unit test the service?
-4. What if we need plugin-style extensibility?
-5. How does this map to a microservices HLD?
+1. How would you unit test `Producer-Consumer` in isolation?
+2. How would you extend Producer-Consumer without modifying core service?
+3. How would you add persistence behind a Repository?
+4. How does this map to a distributed HLD?
 
 ---
 
 ## 14. Related Links
 
-- [Producer-Consumer pattern](../../01-core-concepts/design-patterns-gof.md)
+- [Concurrency LLD track](../../04-concurrency-lld/README.md)
+- [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
-- [Pattern picker](../../00-interview-framework/04-pattern-picker.md)
+- [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
 - [Java implementation](../../09-code-implementations/java/concurrency/producer-consumer/) (full)
-

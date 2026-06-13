@@ -6,6 +6,17 @@
 
 ---
 
+## Case Study
+
+> **Full case study:** [CS-HLD-C62-global-chat-translation.md](../../../Case Studies/hld/classic/CS-HLD-C62-global-chat-translation.md)
+> **Read order:** Case Study → this question (timed mock)
+
+**Business context:** Real-world context modeled after WhatsApp real-time message translation. Read the full case study for requirements, constraints, ADRs, and ops.
+
+**Key constraints:** budget, timeline, team size, tech stack
+
+---
+
 ## Problem Statement
 
 Design a scalable system for: **Global Chat with Translation**.
