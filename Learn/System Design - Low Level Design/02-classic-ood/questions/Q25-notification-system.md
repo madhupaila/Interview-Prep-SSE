@@ -10,7 +10,7 @@
 
 > **Full case study:** [CS-LLD-O25-notification-system.md](../../../Case Studies/lld/classic-ood/CS-LLD-O25-notification-system.md)
 > **End-to-end pair:** [Notification System](../../../Case Studies/paired/CS-PAIR-13-notification-system.md)
-> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+> **Read order:** Case Study → this question → [Java implementation](../../09-code-implementations/)
 
 **Business context:** Real-world context modeled after Twilio and Firebase Cloud Messaging. Read the full case study for requirements, constraints, ADRs, and ops.
 
@@ -234,4 +234,4 @@ S-->>U: DomainException
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
 - [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
-- [Java implementation](../../09-code-implementations/java/classic/notification-system/) (full)
+- [Java implementation](../../09-code-implementations/java/classic/notification-system/README.md) (full)

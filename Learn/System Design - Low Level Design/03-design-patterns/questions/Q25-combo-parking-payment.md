@@ -9,7 +9,7 @@
 ## Case Study
 
 > **Full case study:** [CS-LLD-P25-combo-parking-payment.md](../../../Case Studies/lld/design-patterns/CS-LLD-P25-combo-parking-payment.md)
-> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+> **Read order:** Case Study → this question → [Java implementation](../../09-code-implementations/)
 
 **Business context:** Real-world context modeled after Leading products in the Combo — Parking + Payment domain. Read the full case study for requirements, constraints, ADRs, and ops.
 
@@ -237,5 +237,5 @@ S-->>U: DomainException
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
 - [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
-- [Java implementation](../../09-code-implementations/java/patterns/combo-parking-payment/) (full)
-- [HLD counterpart](../System%20Design%20-%20High%20Level%20Design/03-classic-hld/questions/Q30-parking-lot-elevator.md)
+- [Java implementation](../../09-code-implementations/java/patterns/combo-parking-payment/README.md) (full)
+- [HLD counterpart](../../../System%20Design%20-%20High%20Level%20Design/03-classic-hld/questions/Q30-parking-lot-elevator.md)

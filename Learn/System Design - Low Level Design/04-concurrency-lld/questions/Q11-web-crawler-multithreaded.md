@@ -10,7 +10,7 @@
 
 > **Full case study:** [CS-LLD-X11-web-crawler-multithreaded.md](../../../Case Studies/lld/concurrency/CS-LLD-X11-web-crawler-multithreaded.md)
 > **End-to-end pair:** [Web Crawler at Scale](../../../Case Studies/paired/CS-PAIR-19-web-crawler.md)
-> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+> **Read order:** Case Study → this question → [Java implementation](../../09-code-implementations/)
 
 **Business context:** Real-world context modeled after Googlebot — parallel fetch with URL frontier. Read the full case study for requirements, constraints, ADRs, and ops.
 
@@ -239,4 +239,4 @@ S-->>U: DomainException
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
 - [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
-- [Java implementation](../../09-code-implementations/java/concurrency/web-crawler-multithreaded/) (full)
+- [Java implementation](../../09-code-implementations/java/concurrency/web-crawler-multithreaded/README.md) (full)

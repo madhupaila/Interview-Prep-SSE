@@ -10,7 +10,7 @@
 
 > **Full case study:** [CS-LLD-O43-news-feed-object-model.md](../../../Case Studies/lld/classic-ood/CS-LLD-O43-news-feed-object-model.md)
 > **End-to-end pair:** [Twitter News Feed](../../../Case Studies/paired/CS-PAIR-06-twitter-news-feed.md)
-> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+> **Read order:** Case Study → this question → [Java implementation](../../09-code-implementations/)
 
 **Business context:** Real-world context modeled after Facebook News Feed object graph. Read the full case study for requirements, constraints, ADRs, and ops.
 
@@ -242,4 +242,4 @@ S-->>U: DomainException
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
 - [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
-- [Java implementation](../../09-code-implementations/java/classic/news-feed-object-model/) (skeleton)
+- [Java implementation](../../09-code-implementations/java/classic/news-feed-object-model/README.md) (skeleton)

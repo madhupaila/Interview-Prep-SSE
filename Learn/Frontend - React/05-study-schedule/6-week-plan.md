@@ -85,7 +85,7 @@ Topics: design systems, micro FE, Redux/Zustand, concurrent features, tables, of
 | Wed | **Mock:** RAG citation UI [Q04](../02-genai-llm-react/questions/Q04-rag-citation-source-panel.md) |
 | Thu | Weak areas from all tracks |
 | Fri | Light review — memory maps only |
-| Sat | Cross-train: [HLD GenAI](../System%20Design%20-%20High%20Level%20Design/02-genai-llm-hld/) + React GenAI |
+| Sat | Cross-train: [HLD GenAI](../../System%20Design%20-%20High%20Level%20Design/02-genai-llm-hld/questions/) + React GenAI |
 | Sun | Rest / flashcard memory hooks only |
 
 ---
@@ -101,5 +101,5 @@ Topics: design systems, micro FE, Redux/Zustand, concurrent features, tables, of
 ## Related
 
 - [Company Question Index](../04-company-question-index.md)
-- [HLD 8-Week Plan](../System%20Design%20-%20High%20Level%20Design/06-study-schedule/8-week-plan.md)
-- [LLD 8-Week Plan](../System%20Design%20-%20Low%20Level%20Design/08-study-schedule/8-week-plan.md)
+- [HLD 8-Week Plan](../../System%20Design%20-%20High%20Level%20Design/06-study-schedule/8-week-plan.md)
+- [LLD 8-Week Plan](../../System%20Design%20-%20Low%20Level%20Design/08-study-schedule/8-week-plan.md)

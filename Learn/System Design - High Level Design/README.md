@@ -81,3 +81,4 @@ Every question file includes a **Case Study** link at the top, then:
 - [How to Draw Diagrams](00-interview-framework/02-how-to-draw-diagrams.md)
 - [Gen AI Memory Map](02-genai-llm-hld/memory-map-genai.md)
 - [Master Memory Map](01-core-concepts/memory-map-master.md)
+- Sibling tracks: [LLD](../System%20Design%20-%20Low%20Level%20Design/README.md) · [Case Studies](../Case%20Studies/README.md) · [React](../Frontend%20-%20React/README.md) · [DSA](../DSA%20-%20Algorithms/README.md) · [Learn hub](../README.md)

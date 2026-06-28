@@ -9,7 +9,7 @@
 ## Case Study
 
 > **Full case study:** [CS-LLD-O10-vending-machine.md](../../../Case Studies/lld/classic-ood/CS-LLD-O10-vending-machine.md)
-> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+> **Read order:** Case Study → this question → [Java implementation](../../09-code-implementations/)
 
 **Business context:** Real-world context modeled after Automated retail inventory and change. Read the full case study for requirements, constraints, ADRs, and ops.
 
@@ -240,4 +240,4 @@ V-->>U: InsufficientFundsException
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
 - [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
-- [Java implementation](../../09-code-implementations/java/classic/vending-machine/) (full)
+- [Java implementation](../../09-code-implementations/java/classic/vending-machine/Demo.java) (full)

@@ -88,7 +88,7 @@
 | Day | Focus |
 |-----|-------|
 | Mon–Fri | 3 concurrency questions/day |
-| Sat | Code practice — [09-code-implementations/](../09-code-implementations/) |
+| Sat | Code practice — [09-code-implementations](../09-code-implementations/README.md) |
 | Sun | **Mock:** Concurrent LRU + Rate Limiter (60 min) |
 
 **Deliverable:** Thread-safety vocabulary fluent.
@@ -123,4 +123,4 @@
 
 - [Company Question Index](../07-company-question-index.md)
 - [Case Studies Index](../../Case%20Studies/index.md)
-- [HLD 8-Week Plan](../System%20Design%20-%20High%20Level%20Design/06-study-schedule/8-week-plan.md)
+- [HLD 8-Week Plan](../../System%20Design%20-%20High%20Level%20Design/06-study-schedule/8-week-plan.md)

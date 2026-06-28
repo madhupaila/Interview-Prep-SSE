@@ -56,5 +56,5 @@ const style = useMemo(() => ({ color: 'red' }), []);
 
 ## Related Questions
 
-- [Q20 React.memo useMemo useCallback](../03-classic-react/questions/Q20-react-memo-usememo-usecallback.md)
-- [Q21 Virtualize long list](../03-classic-react/questions/Q21-virtualize-long-list.md)
+- [Q14 React.memo useMemo useCallback](../03-classic-react/questions/Q14-react-memo-usememo-usecallback.md)
+- [Q20 Virtualize long list](../03-classic-react/questions/Q20-virtualize-long-list.md)

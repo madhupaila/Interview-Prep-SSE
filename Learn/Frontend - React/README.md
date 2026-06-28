@@ -88,3 +88,6 @@ Every question file includes:
 - [GenAI React Memory Map](02-genai-llm-react/memory-map-genai-react.md)
 - [HLD Prep Guide (sibling)](../System%20Design%20-%20High%20Level%20Design/README.md)
 - [LLD Prep Guide (sibling)](../System%20Design%20-%20Low%20Level%20Design/README.md)
+- [Case Studies (sibling)](../Case%20Studies/README.md)
+- [DSA Patterns Mastery (sibling)](../DSA%20-%20Algorithms/README.md)
+- [Learn hub](../README.md)

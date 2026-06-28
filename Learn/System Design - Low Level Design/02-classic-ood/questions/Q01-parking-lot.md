@@ -10,7 +10,7 @@
 
 > **Full case study:** [CS-LLD-O01-parking-lot.md](../../../Case Studies/lld/classic-ood/CS-LLD-O01-parking-lot.md)
 > **End-to-end pair:** [Parking Lot at Scale](../../../Case Studies/paired/CS-PAIR-02-parking-lot-at-scale.md)
-> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+> **Read order:** Case Study → this question → [Java implementation](../../09-code-implementations/)
 
 **Business context:** Design the **in-process object model** for a multi-floor garage: motorcycles, cars, trucks; multiple entry gates concurrent; ticket on entry, payment on exit.
 
@@ -246,5 +246,5 @@ sequenceDiagram
 
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
-- [Java implementation](../../09-code-implementations/java/classic/parking-lot/) (full)
-- [HLD Parking Lot / Elevator](../System%20Design%20-%20High%20Level%20Design/03-classic-hld/questions/Q30-parking-lot-elevator.md)
+- [Java implementation](../../09-code-implementations/java/classic/parking-lot/ParkingLotDemo.java) (full)
+- [HLD Parking Lot / Elevator](../../../System%20Design%20-%20High%20Level%20Design/03-classic-hld/questions/Q30-parking-lot-elevator.md)

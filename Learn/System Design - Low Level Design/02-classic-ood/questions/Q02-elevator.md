@@ -9,7 +9,7 @@
 ## Case Study
 
 > **Full case study:** [CS-LLD-O02-elevator.md](../../../Case Studies/lld/classic-ood/CS-LLD-O02-elevator.md)
-> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+> **Read order:** Case Study → this question → [Java implementation](../../09-code-implementations/)
 
 **Business context:** Real-world context modeled after Otis elevator group dispatch algorithms. Read the full case study for requirements, constraints, ADRs, and ops.
 
@@ -238,5 +238,5 @@ C-->>U: InvalidFloorException
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
 - [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
-- [Java implementation](../../09-code-implementations/java/classic/elevator/) (full)
-- [HLD counterpart](../System%20Design%20-%20High%20Level%20Design/03-classic-hld/questions/Q30-parking-lot-elevator.md)
+- [Java implementation](../../09-code-implementations/java/classic/elevator/Demo.java) (full)
+- [HLD counterpart](../../../System%20Design%20-%20High%20Level%20Design/03-classic-hld/questions/Q30-parking-lot-elevator.md)

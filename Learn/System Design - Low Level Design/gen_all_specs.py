@@ -93,7 +93,7 @@ META: dict[str, list] = {
         (21,"ride-sharing-uber","Ride Sharing (Uber)","Uber, Lyft, Amazon","Hard",
          "Design ride matching: request ride, match driver, trip lifecycle, fare.",
          "RideService",[("Rider","Passenger"),("Driver","Supply side"),("Trip","Active ride"),("Location","GPS point"),("FareCalculator","Pricing"),("MatchingStrategy","Driver selection")],
-         "MatchingStrategy","03-classic-hld/questions/Q12-ride-sharing.md","full"),
+         "MatchingStrategy","03-classic-hld/questions/Q05-uber-ride-sharing.md","full"),
         (22,"shopping-cart","Shopping Cart","Amazon, Walmart, Shopify","Medium",
          "Design e-commerce cart: add/remove items, quantity, apply coupon, checkout.",
          "CartService",[("ShoppingCart","Session cart"),("CartItem","SKU + qty"),("Product","Catalog item"),("Customer","Shopper"),("Coupon","Discount rule")],

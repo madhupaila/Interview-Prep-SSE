@@ -9,7 +9,7 @@
 ## Case Study
 
 > **Full case study:** [CS-LLD-O63-cache-aside-ood.md](../../../Case Studies/lld/classic-ood/CS-LLD-O63-cache-aside-ood.md)
-> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+> **Read order:** Case Study → this question → [Java implementation](../../09-code-implementations/)
 
 **Business context:** Real-world context modeled after Redis cache-aside at object level. Read the full case study for requirements, constraints, ADRs, and ops.
 
@@ -236,4 +236,4 @@ S-->>U: DomainException
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
 - [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
-- [Java implementation](../../09-code-implementations/java/classic/cache-aside-ood/) (full)
+- [Java implementation](../../09-code-implementations/java/classic/cache-aside-ood/README.md) (full)

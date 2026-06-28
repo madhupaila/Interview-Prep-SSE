@@ -9,7 +9,7 @@
 ## Case Study
 
 > **Full case study:** [CS-LLD-O55-flight-seat-map.md](../../../Case Studies/lld/classic-ood/CS-LLD-O55-flight-seat-map.md)
-> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+> **Read order:** Case Study → this question → [Java implementation](../../09-code-implementations/)
 
 **Business context:** Real-world context modeled after Leading products in the Flight Seat Map domain. Read the full case study for requirements, constraints, ADRs, and ops.
 
@@ -238,4 +238,4 @@ S-->>U: DomainException
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
 - [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
-- [Java implementation](../../09-code-implementations/java/classic/flight-seat-map/) (full)
+- [Java implementation](../../09-code-implementations/java/classic/flight-seat-map/README.md) (full)

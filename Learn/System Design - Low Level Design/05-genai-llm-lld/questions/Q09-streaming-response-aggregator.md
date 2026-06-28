@@ -10,7 +10,7 @@
 
 > **Full case study:** [CS-LLD-A09-streaming-response-aggregator.md](../../../Case Studies/lld/genai/CS-LLD-A09-streaming-response-aggregator.md)
 > **End-to-end pair:** [Streaming LLM Responses](../../../Case Studies/paired/CS-PAIR-17-streaming-llm.md)
-> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+> **Read order:** Case Study → this question → [Java implementation](../../09-code-implementations/)
 
 **Business context:** Real-world context modeled after ChatGPT SSE streaming and token aggregation. Read the full case study for requirements, constraints, ADRs, and ops.
 
@@ -232,4 +232,4 @@ S-->>U: DomainException
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
 - [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
-- [Java implementation](../../09-code-implementations/java/genai/streaming-response-aggregator/) (skeleton)
+- [Java implementation](../../09-code-implementations/java/genai/streaming-response-aggregator/README.md) (skeleton)
