@@ -9,7 +9,7 @@
 ## Case Study
 
 > **Full case study:** [CS-LLD-X05-dining-philosophers.md](../../../Case Studies/lld/concurrency/CS-LLD-X05-dining-philosophers.md)
-> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+> **Read order:** Case Study → this question → [Java implementation](../../09-code-implementations/)
 
 **Business context:** Real-world context modeled after Classic concurrency problem — resource ordering. Read the full case study for requirements, constraints, ADRs, and ops.
 
@@ -236,4 +236,4 @@ Note over P1,P2: deadlock without ordering
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
 - [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
-- [Java implementation](../../09-code-implementations/java/concurrency/dining-philosophers/) (full)
+- [Java implementation](../../09-code-implementations/java/concurrency/dining-philosophers/README.md) (full)

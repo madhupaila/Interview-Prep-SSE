@@ -10,7 +10,7 @@
 
 > **Full case study:** [CS-LLD-A06-llm-provider-abstraction.md](../../../Case Studies/lld/genai/CS-LLD-A06-llm-provider-abstraction.md)
 > **End-to-end pair:** [LLM API Gateway / Model Router](../../../Case Studies/paired/CS-PAIR-10-llm-api-gateway.md)
-> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+> **Read order:** Case Study → this question → [Java implementation](../../09-code-implementations/)
 
 **Business context:** Real-world context modeled after LiteLLM — unified provider interface. Read the full case study for requirements, constraints, ADRs, and ops.
 
@@ -236,5 +236,5 @@ S-->>U: DomainException
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
 - [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
-- [Java implementation](../../09-code-implementations/java/genai/llm-provider-abstraction/) (full)
-- [HLD counterpart](../System%20Design%20-%20High%20Level%20Design/02-genai-llm-hld/questions/Q05-llm-api-gateway.md)
+- [Java implementation](../../09-code-implementations/java/genai/llm-provider-abstraction/README.md) (full)
+- [HLD counterpart](../../../System%20Design%20-%20High%20Level%20Design/02-genai-llm-hld/questions/Q05-llm-api-gateway.md)

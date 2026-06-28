@@ -10,7 +10,7 @@
 
 > **Full case study:** [CS-LLD-A08-guardrail-safety-chain.md](../../../Case Studies/lld/genai/CS-LLD-A08-guardrail-safety-chain.md)
 > **End-to-end pair:** [Content Moderation for LLM Apps](../../../Case Studies/paired/CS-PAIR-16-content-moderation-llm.md)
-> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+> **Read order:** Case Study → this question → [Java implementation](../../09-code-implementations/)
 
 **Business context:** Real-world context modeled after Anthropic Constitutional AI and OpenAI moderation. Read the full case study for requirements, constraints, ADRs, and ops.
 
@@ -237,5 +237,5 @@ S-->>U: DomainException
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
 - [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
-- [Java implementation](../../09-code-implementations/java/genai/guardrail-safety-chain/) (full)
-- [HLD counterpart](../System%20Design%20-%20High%20Level%20Design/02-genai-llm-hld/questions/Q15-content-moderation-llm.md)
+- [Java implementation](../../09-code-implementations/java/genai/guardrail-safety-chain/README.md) (full)
+- [HLD counterpart](../../../System%20Design%20-%20High%20Level%20Design/02-genai-llm-hld/questions/Q15-content-moderation-llm.md)

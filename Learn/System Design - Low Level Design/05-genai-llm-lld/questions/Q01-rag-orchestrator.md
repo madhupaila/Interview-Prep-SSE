@@ -10,7 +10,7 @@
 
 > **Full case study:** [CS-LLD-A01-rag-orchestrator.md](../../../Case Studies/lld/genai/CS-LLD-A01-rag-orchestrator.md)
 > **End-to-end pair:** [Enterprise RAG Document Q&A](../../../Case Studies/paired/CS-PAIR-01-enterprise-rag.md)
-> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+> **Read order:** Case Study → this question → [Java implementation](../../09-code-implementations/)
 
 **Business context:** Design the **object model** for retrieve → rerank → assemble context → generate. Vector DB and LLM API are external (HLD). Focus on SOLID, testability, and swappable components.
 
@@ -242,5 +242,5 @@ R-->>U: NoContextException
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
 - [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
-- [Java implementation](../../09-code-implementations/java/genai/rag-orchestrator/) (full)
-- [HLD counterpart](../System%20Design%20-%20High%20Level%20Design/02-genai-llm-hld/questions/Q02-rag-document-qa.md)
+- [Java implementation](../../09-code-implementations/java/genai/rag-orchestrator/Generator.java) (full)
+- [HLD counterpart](../../../System%20Design%20-%20High%20Level%20Design/02-genai-llm-hld/questions/Q02-rag-document-qa.md)

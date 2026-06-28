@@ -10,7 +10,7 @@
 
 > **Full case study:** [CS-LLD-A02-agent-tool-registry.md](../../../Case Studies/lld/genai/CS-LLD-A02-agent-tool-registry.md)
 > **End-to-end pair:** [Code Assistant (Copilot-like)](../../../Case Studies/paired/CS-PAIR-11-code-assistant-copilot.md)
-> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+> **Read order:** Case Study → this question → [Java implementation](../../09-code-implementations/)
 
 **Business context:** Real-world context modeled after OpenAI function calling and tool schemas. Read the full case study for requirements, constraints, ADRs, and ops.
 
@@ -234,5 +234,5 @@ S-->>U: DomainException
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
 - [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
-- [Java implementation](../../09-code-implementations/java/genai/agent-tool-registry/) (full)
-- [HLD counterpart](../System%20Design%20-%20High%20Level%20Design/02-genai-llm-hld/questions/Q08-multi-agent-workflow.md)
+- [Java implementation](../../09-code-implementations/java/genai/agent-tool-registry/README.md) (full)
+- [HLD counterpart](../../../System%20Design%20-%20High%20Level%20Design/02-genai-llm-hld/questions/Q08-multi-agent-workflow.md)

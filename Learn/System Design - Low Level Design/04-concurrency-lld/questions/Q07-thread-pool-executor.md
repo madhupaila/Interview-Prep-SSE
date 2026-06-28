@@ -9,7 +9,7 @@
 ## Case Study
 
 > **Full case study:** [CS-LLD-X07-thread-pool-executor.md](../../../Case Studies/lld/concurrency/CS-LLD-X07-thread-pool-executor.md)
-> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+> **Read order:** Case Study → this question → [Java implementation](../../09-code-implementations/)
 
 **Business context:** Real-world context modeled after Java ExecutorService and ForkJoinPool. Read the full case study for requirements, constraints, ADRs, and ops.
 
@@ -232,4 +232,4 @@ S-->>U: DomainException
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
 - [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
-- [Java implementation](../../09-code-implementations/java/concurrency/thread-pool-executor/) (full)
+- [Java implementation](../../09-code-implementations/java/concurrency/thread-pool-executor/README.md) (full)

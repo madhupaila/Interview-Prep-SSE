@@ -10,7 +10,7 @@
 
 > **Full case study:** [CS-LLD-O14-rate-limiter.md](../../../Case Studies/lld/classic-ood/CS-LLD-O14-rate-limiter.md)
 > **End-to-end pair:** [Rate-Limited API Platform](../../../Case Studies/paired/CS-PAIR-04-rate-limited-api.md)
-> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+> **Read order:** Case Study → this question → [Java implementation](../../09-code-implementations/)
 
 **Business context:** Real-world context modeled after Stripe rate limiter and Envoy local rate limit. Read the full case study for requirements, constraints, ADRs, and ops.
 
@@ -231,4 +231,4 @@ S-->>U: DomainException
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
 - [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
-- [Java implementation](../../09-code-implementations/java/classic/rate-limiter/) (full)
+- [Java implementation](../../09-code-implementations/java/classic/rate-limiter/RateLimiter.java) (full)

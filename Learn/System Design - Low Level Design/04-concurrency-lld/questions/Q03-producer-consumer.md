@@ -9,7 +9,7 @@
 ## Case Study
 
 > **Full case study:** [CS-LLD-X03-producer-consumer.md](../../../Case Studies/lld/concurrency/CS-LLD-X03-producer-consumer.md)
-> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+> **Read order:** Case Study → this question → [Java implementation](../../09-code-implementations/)
 
 **Business context:** Real-world context modeled after Kafka consumer groups pattern. Read the full case study for requirements, constraints, ADRs, and ops.
 
@@ -227,4 +227,4 @@ Q-->>Prod: notify
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
 - [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
-- [Java implementation](../../09-code-implementations/java/concurrency/producer-consumer/) (full)
+- [Java implementation](../../09-code-implementations/java/concurrency/producer-consumer/BoundedBlockingQueue.java) (full)

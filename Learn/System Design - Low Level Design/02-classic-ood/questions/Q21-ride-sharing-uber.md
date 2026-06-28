@@ -10,7 +10,7 @@
 
 > **Full case study:** [CS-LLD-O21-ride-sharing-uber.md](../../../Case Studies/lld/classic-ood/CS-LLD-O21-ride-sharing-uber.md)
 > **End-to-end pair:** [Uber Ride Sharing](../../../Case Studies/paired/CS-PAIR-12-uber-ride-sharing.md)
-> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+> **Read order:** Case Study → this question → [Java implementation](../../09-code-implementations/)
 
 **Business context:** Real-world context modeled after Uber trip state machine and matching. Read the full case study for requirements, constraints, ADRs, and ops.
 
@@ -242,5 +242,5 @@ S-->>U: DomainException
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
 - [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
-- [Java implementation](../../09-code-implementations/java/classic/ride-sharing-uber/) (full)
-- [HLD counterpart](../System%20Design%20-%20High%20Level%20Design/03-classic-hld/questions/Q12-ride-sharing.md)
+- [Java implementation](../../09-code-implementations/java/classic/ride-sharing-uber/Demo.java) (full)
+- [HLD counterpart](../../../System%20Design%20-%20High%20Level%20Design/03-classic-hld/questions/Q05-uber-ride-sharing.md)

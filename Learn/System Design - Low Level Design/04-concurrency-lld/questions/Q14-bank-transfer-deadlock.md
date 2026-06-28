@@ -9,7 +9,7 @@
 ## Case Study
 
 > **Full case study:** [CS-LLD-X14-bank-transfer-deadlock.md](../../../Case Studies/lld/concurrency/CS-LLD-X14-bank-transfer-deadlock.md)
-> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+> **Read order:** Case Study → this question → [Java implementation](../../09-code-implementations/)
 
 **Business context:** Real-world context modeled after Banking transfer ordering to prevent deadlock. Read the full case study for requirements, constraints, ADRs, and ops.
 
@@ -234,4 +234,4 @@ Note over T: Without ordering — Thread1 locks A1, Thread2 locks A2 → deadloc
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
 - [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
-- [Java implementation](../../09-code-implementations/java/concurrency/bank-transfer-deadlock/) (full)
+- [Java implementation](../../09-code-implementations/java/concurrency/bank-transfer-deadlock/README.md) (full)

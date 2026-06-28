@@ -112,3 +112,7 @@ Every question file includes **Parking Lot-level detail** (all 14 sections):
 - [LLD vs HLD Boundary](01-core-concepts/lld-vs-hld-boundary.md)
 - [Company Question Index](07-company-question-index.md)
 - [HLD Prep Guide (sibling)](../System%20Design%20-%20High%20Level%20Design/README.md)
+- [Case Studies (sibling)](../Case%20Studies/README.md)
+- [React Prep Guide (sibling)](../Frontend%20-%20React/README.md)
+- [DSA Patterns Mastery (sibling)](../DSA%20-%20Algorithms/README.md)
+- [Learn hub](../README.md)

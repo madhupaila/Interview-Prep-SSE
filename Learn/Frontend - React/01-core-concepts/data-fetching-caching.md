@@ -45,5 +45,5 @@ Must include: **AbortController**, loading/error state, avoid setState on unmoun
 
 ## Related Questions
 
-- [Q25 TanStack Query vs useEffect](../03-classic-react/questions/Q25-tanstack-query-vs-useeffect.md)
-- [Q26 Optimistic updates](../03-classic-react/questions/Q26-optimistic-updates-mutation.md)
+- [Q21 TanStack Query vs useEffect](../03-classic-react/questions/Q21-tanstack-query-vs-useeffect.md)
+- [Q22 Optimistic updates](../03-classic-react/questions/Q22-optimistic-updates-mutation.md)

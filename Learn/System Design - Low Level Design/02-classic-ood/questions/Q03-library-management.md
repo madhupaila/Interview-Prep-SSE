@@ -9,7 +9,7 @@
 ## Case Study
 
 > **Full case study:** [CS-LLD-O03-library-management.md](../../../Case Studies/lld/classic-ood/CS-LLD-O03-library-management.md)
-> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+> **Read order:** Case Study → this question → [Java implementation](../../09-code-implementations/)
 
 **Business context:** Real-world context modeled after OCLC library catalog systems. Read the full case study for requirements, constraints, ADRs, and ops.
 
@@ -250,4 +250,4 @@ L-->>M: ItemUnavailableException
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
 - [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
-- [Java implementation](../../09-code-implementations/java/classic/library-management/) (full)
+- [Java implementation](../../09-code-implementations/java/classic/library-management/README.md) (full)

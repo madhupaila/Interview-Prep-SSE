@@ -61,5 +61,5 @@ interface AssistantMessage {
 
 ## Related Questions
 
-- [Q05 RAG citation UI](../02-genai-llm-react/questions/Q05-rag-citation-source-panel.md)
-- [Q06 Document upload ingest status](../02-genai-llm-react/questions/Q06-document-upload-ingest-status.md)
+- [Q04 RAG citation UI](questions/Q04-rag-citation-source-panel.md)
+- [Q05 Document upload ingest status](questions/Q05-document-upload-ingest-status.md)

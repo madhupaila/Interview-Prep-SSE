@@ -1,6 +1,6 @@
 # Gen AI LLD Memory Map
 
-**Print this page.** In-process object design for Gen AI — complements [HLD Gen AI Memory Map](../System%20Design%20-%20High%20Level%20Design/02-genai-llm-hld/memory-map-genai.md).
+**Print this page.** In-process object design for Gen AI — complements [HLD Gen AI Memory Map](../../System%20Design%20-%20High%20Level%20Design/02-genai-llm-hld/memory-map-genai.md).
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -54,5 +54,5 @@
 ## Related
 
 - [Gen AI LLD Questions](questions/)
-- [HLD RAG Q02](../System%20Design%20-%20High%20Level%20Design/02-genai-llm-hld/questions/Q02-rag-document-qa.md)
+- [HLD RAG Q02](../../System%20Design%20-%20High%20Level%20Design/02-genai-llm-hld/questions/Q02-rag-document-qa.md)
 - [LLD vs HLD Boundary](../01-core-concepts/lld-vs-hld-boundary.md)

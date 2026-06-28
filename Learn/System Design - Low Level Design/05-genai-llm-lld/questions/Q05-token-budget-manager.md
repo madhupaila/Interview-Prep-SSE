@@ -10,7 +10,7 @@
 
 > **Full case study:** [CS-LLD-A05-token-budget-manager.md](../../../Case Studies/lld/genai/CS-LLD-A05-token-budget-manager.md)
 > **End-to-end pair:** [Token Budget & Cost Control](../../../Case Studies/paired/CS-PAIR-20-token-budget-cost.md)
-> **Read order:** Case Study → this question → [Java implementation](../09-code-implementations/)
+> **Read order:** Case Study → this question → [Java implementation](../../09-code-implementations/)
 
 **Business context:** Real-world context modeled after OpenAI token counting and context window limits. Read the full case study for requirements, constraints, ADRs, and ops.
 
@@ -237,4 +237,4 @@ S-->>U: DomainException
 - [Strategy pattern](../../01-core-concepts/design-patterns-gof.md)
 - [SOLID principles](../../01-core-concepts/solid-principles.md)
 - [Concurrency fundamentals](../../01-core-concepts/concurrency-fundamentals.md)
-- [Java implementation](../../09-code-implementations/java/genai/token-budget-manager/) (skeleton)
+- [Java implementation](../../09-code-implementations/java/genai/token-budget-manager/README.md) (skeleton)

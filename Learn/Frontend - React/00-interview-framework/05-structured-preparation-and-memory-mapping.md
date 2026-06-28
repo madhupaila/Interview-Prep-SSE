@@ -31,7 +31,7 @@ Map every interview question to **one zone**. When you hear a question, say sile
 | **Z7** | **GenAI** | **STREAM** | Signal, Token append, Render safe, Error abort, A11y, Messages |
 
 Print the full maps:
-- Zones Z1–Z6 → [memory-map-master.md](memory-map-master.md)
+- Zones Z1–Z6 → [memory-map-master.md](../../System%20Design%20-%20Low%20Level%20Design/01-core-concepts/memory-map-master.md)
 - Zone Z7 → [memory-map-genai-react.md](../02-genai-llm-react/memory-map-genai-react.md)
 
 ---
@@ -62,7 +62,7 @@ flowchart TD
 | "Design a modal / form" | Z6 | "Portal, focus trap, RHF+Zod, prevent double submit." |
 | "Build ChatGPT UI" | Z7 | "Message array + fetch stream + AbortController + sanitize markdown." |
 
-Full trigger list → [memory-map-flashcards.md](memory-map-flashcards.md)
+Full trigger list → [memory-map-flashcards.md](../01-core-concepts/memory-map-flashcards.md)
 
 ---
 
@@ -161,12 +161,12 @@ status: sending | streaming | complete | error | aborted
 
 | Day | 20 min read | 15 min drill | 25 min speak |
 |-----|-------------|--------------|--------------|
-| Mon | [rendering-reconciliation.md](rendering-reconciliation.md) | Draw TRAC 3× | Q01 Virtual DOM script |
-| Tue | [state-management.md](state-management.md) | LOCUS on 3 apps | Q06 useState vs reducer |
-| Wed | [hooks-deep-dive.md](hooks-deep-dive.md) | REFUSE checklist | Q10 useEffect deps |
-| Thu | [data-fetching-caching.md](data-fetching-caching.md) | Query vs useEffect | Q21 TanStack Query |
+| Mon | [rendering-reconciliation.md](../01-core-concepts/rendering-reconciliation.md) | Draw TRAC 3× | Q01 Virtual DOM script |
+| Tue | [state-management.md](../01-core-concepts/state-management.md) | LOCUS on 3 apps | Q06 useState vs reducer |
+| Wed | [hooks-deep-dive.md](../01-core-concepts/hooks-deep-dive.md) | REFUSE checklist | Q10 useEffect deps |
+| Thu | [data-fetching-caching.md](../01-core-concepts/data-fetching-caching.md) | Query vs useEffect | Q21 TanStack Query |
 | Fri | [04-decision-picker.md](../00-interview-framework/04-decision-picker.md) | Random "what would you use?" | Q03 re-renders |
-| Sat | [memory-map-master.md](memory-map-master.md) | Fill blank map from memory | Q02 keys + Q14 memo |
+| Sat | [memory-map-master.md](../../System%20Design%20-%20Low%20Level%20Design/01-core-concepts/memory-map-master.md) | Fill blank map from memory | Q02 keys + Q14 memo |
 | Sun | **Mock 45 min** | — | One concept + one live code |
 
 ### Week B — Depth (Layer 3)
@@ -221,7 +221,7 @@ On blank paper, redraw from memory:
 2. LOCUS state row
 3. One hook rule (effects after paint)
 
-Compare to [memory-map-master.md](memory-map-master.md). Mark gaps → tomorrow's read.
+Compare to [memory-map-master.md](../../System%20Design%20-%20Low%20Level%20Design/01-core-concepts/memory-map-master.md). Mark gaps → tomorrow's read.
 
 ### Drill C — MEMOP one question (5 min)
 
@@ -256,9 +256,9 @@ Pick one question file. Close it. Speak full MEMOP answer in 3 minutes. Open fil
 
 | Resource | Purpose |
 |----------|---------|
-| [memory-map-master.md](memory-map-master.md) | Print — Zones Z1–Z6 |
-| [memory-map-flashcards.md](memory-map-flashcards.md) | Trigger → one-line answer |
-| [memory-map-visual-one-page.md](memory-map-visual-one-page.md) | Single-page poster |
+| [memory-map-master.md](../../System%20Design%20-%20Low%20Level%20Design/01-core-concepts/memory-map-master.md) | Print — Zones Z1–Z6 |
+| [memory-map-flashcards.md](../01-core-concepts/memory-map-flashcards.md) | Trigger → one-line answer |
+| [memory-map-visual-one-page.md](../01-core-concepts/memory-map-visual-one-page.md) | Single-page poster |
 | [04-decision-picker.md](../00-interview-framework/04-decision-picker.md) | What hook/pattern when |
 | [03-senior-swe-signals.md](../00-interview-framework/03-senior-swe-signals.md) | What interviewers score |
 | [80 questions](../03-classic-react/questions/) | Speak scripts |
